@@ -26,8 +26,30 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-The API checks endpoint is `GET /api/health/`. The initial project has no
-business models or authentication flows yet.
+The API checks endpoint is `GET /api/health/`. Business models are grouped
+under `apps/accounts`, `apps/companies`, `apps/catalog`, `apps/orders`,
+`apps/logistics`, `apps/payments` and `apps/audit`. No login endpoints or
+frontend pages are implemented yet.
+
+## Demo data and tests
+
+After applying migrations, load idempotent local demo data:
+
+```powershell
+python manage.py seed_demo
+```
+
+Run the test suite without a local PostgreSQL server by using the in-memory
+SQLite test settings:
+
+```powershell
+$env:DJANGO_SECRET_KEY = "local-test-only"
+python manage.py test apps.core --settings=config.test_settings
+```
+
+The approved ERD and endpoint proposal are in
+[`../docs/00_umumiy_kontekst.md`](../docs/00_umumiy_kontekst.md) and
+[`../docs/01_erd_va_api_sxemasi.md`](../docs/01_erd_va_api_sxemasi.md).
 
 ## Security and deployment
 

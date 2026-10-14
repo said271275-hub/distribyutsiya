@@ -24,6 +24,10 @@ buyrug‘ini ishlatmang.
 Har bir qism bo‘yicha qo‘llanma: [backend/README.md](backend/README.md) va
 [frontend/README.md](frontend/README.md).
 
+Loyiha konteksti va tasdiqlangan ERD/API taklifi:
+[docs/00_umumiy_kontekst.md](docs/00_umumiy_kontekst.md),
+[docs/01_erd_va_api_sxemasi.md](docs/01_erd_va_api_sxemasi.md).
+
 ## Eslatma
 
 `.env.example` ichidagi qiymatlar faqat mahalliy ishlab chiqish uchun.

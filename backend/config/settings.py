@@ -35,6 +35,13 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "apps.core",
+    "apps.accounts",
+    "apps.companies",
+    "apps.catalog",
+    "apps.orders",
+    "apps.logistics",
+    "apps.payments",
+    "apps.audit",
 ]
 
 MIDDLEWARE = [
@@ -67,6 +74,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
+AUTH_USER_MODEL = "accounts.User"
 
 DATABASES = {
     "default": {
