@@ -57,8 +57,8 @@ bo‘lishi mumkin. `company_admin` va `driver` uchun kompaniya majburiy.
 | Jadval | Muhim maydonlar va cheklovlar |
 |---|---|
 | `Company` | `id`, `name`, `logo`, `brand_color`, `contact_phone`, `is_active`, vaqt tamg‘alari |
-| `User` | `id`, `phone` (unikal), `company` (company_admin/driver uchun majburiy; super_admin/shop_owner uchun bo‘sh), `role`, `is_active`, `is_blocked`, o‘chirish holati, `is_staff`/`is_superuser`; parol/OTP oqimi bu bosqichda yo‘q |
-| `Shop` | `owner` → User, `name`, `phone_primary` (unikal), `phone_secondary` (ixtiyoriy; faqat asosiy raqam unikal), `address`, `district`, `latitude`, `longitude`, `status` |
+| `User` | `id`, `phone` (unikal), `company` (company_admin/driver uchun majburiy; super_admin/shop_owner uchun bo‘sh), `role`, `is_active`, `is_blocked`, o‘chirish holati, `is_staff`/`is_superuser`, `auth_version` |
+| `Shop` | `owner` → User (unikal: bitta akkaunt ko‘pi bilan bitta do‘konga ega), `name`, `phone_primary` (unikal), `phone_secondary` (ixtiyoriy; faqat asosiy raqam unikal), `address`, `district`, `latitude`, `longitude`, `status` |
 | `CompanyShopLink` | `company`, `shop`, `is_active`, yaratilgan vaqt; `(company, shop)` unikal |
 | `Product` | `company`, `name`, `image`, `unit` (`piece`/`box`/`block`), `price`, `is_active` |
 | `ShopPrice` | `company`, `shop`, `product`, `price` (ixtiyoriy maxsus narx), `discount_percent`; `(company, shop, product)` unikal; chegirma 0–100%; faqat shu kompaniyaga tegishli mahsulotga narx beriladi |
@@ -97,7 +97,7 @@ bo‘lishi mumkin. `company_admin` va `driver` uchun kompaniya majburiy.
 
 ## 2. API sxemasi (taklif)
 
-API prefiksi: `/api/v1/`. Barcha ro‘yxat javoblari sahifalangan bo‘lishi,
+Biznes API prefiksi: `/api/v1/`. Barcha ro‘yxat javoblari sahifalangan bo‘lishi,
 vaqtlar ISO 8601 formatida, pul qiymatlari decimal string sifatida qaytishi
 taklif qilinadi. Quyidagi rol ustuni rejalashtirilgan ruxsatlarni bildiradi;
 autentifikatsiya va ruxsatlarni tekshirish keyin amalga oshiriladi.
@@ -109,6 +109,17 @@ biriktirilgan reys doirasida, `SO` esa faqat o‘z do‘koni doirasida ishlaydi.
 | URL | Metod | Kim kira oladi | Kirish maydonlari | Chiqish maydonlari |
 |---|---|---|---|---|
 | `/api/health/` | GET | Ommaviy | — | `status` |
+| `/api/auth/csrf/` | GET | Ommaviy | — | `csrfToken`; `csrftoken` cookie o‘rnatiladi |
+| `/api/auth/register/otp/` | POST | Ommaviy | `phone` | `detail`; mahalliy mock SMS yuboradi |
+| `/api/auth/register/` | POST | Ommaviy | `phone`, `code`, `password` | `detail`, `user` (`shop_owner`) |
+| `/api/auth/login/` | POST | Ommaviy | `phone`, `password` | `access`, `user`; refresh token HttpOnly cookie’da |
+| `/api/auth/staff/login/` | POST | Ommaviy | `phone`, `password` | `access`, `user`; faqat xodim rollari |
+| `/api/auth/refresh/` | POST | Refresh cookie egasi | CSRF header va refresh cookie | yangi `access`; refresh cookie rotatsiyasi |
+| `/api/auth/logout/` | POST | Refresh cookie egasi | CSRF header va refresh cookie | `204`; refresh token bekor qilinadi |
+| `/api/auth/me/` | GET | Kirgan foydalanuvchi | Bearer access token | `id`, `phone`, `role`, `company_id`, `shops[]` |
+| `/api/auth/me/deletion/` | GET | Kirgan foydalanuvchi | Bearer access token | `pending`, sabab va muddat (`pending=true holatda`) |
+| `/api/auth/me/deletion/` | POST | Faqat `shop_owner` | `reason`, `reason_other?`, `password`, CSRF header | `detail`, `scheduled_for`; refresh cookie o‘chiriladi |
+| `/api/auth/restore/` | POST | Ommaviy | `phone`, `password` | `detail`, `access`, `user`; pending so‘rovni bekor qiladi |
 | `/api/v1/companies/` | GET, POST | GET: SA; POST: SA | POST: `name`, `logo?`, `brand_color?`, `contact_phone?` | `id`, kompaniya maydonlari |
 | `/api/v1/companies/{id}/` | GET, PATCH | SA; CA faqat o‘z kompaniyasini | PATCH: `name?`, `logo?`, `brand_color?`, `contact_phone?`, `is_active?` | kompaniya maydonlari |
 | `/api/v1/users/` | GET, POST | SA; CA o‘z kompaniyasi foydalanuvchilari | POST: `phone`, `role`, `company_id?`, `is_active?` | `id`, `phone`, `role`, `is_active`, `is_blocked`, `company_id?` |
@@ -147,10 +158,12 @@ biriktirilgan reys doirasida, `SO` esa faqat o‘z do‘koni doirasida ishlaydi.
 ### OpenAPI hujjatlashtirish
 
 Mavjud DRF/OpenAPI kutubxonasi bilan schema `/api/schema/`, Swagger UI esa
-`/api/docs/` orqali berilishi rejalashtiriladi. Har bir endpointda serializer
-maydonlari, majburiy/ixtiyoriy holat, validatsiya xatolari, sahifalash va
-ruxsat sinflari hujjatlashtiriladi. Ushbu endpointlar ro‘yxati hozircha
-kontrakt taklifidir, ishga tushadigan API emas.
+`/api/docs/` orqali beriladi; ikkala manzil ham faqat `DEBUG=True` bo‘lgan
+ishlab chiqish rejimida ochiq. Auth endpointlari ishga tushgan; `/api/v1/`
+ostidagi biznes endpointlar ushbu jadvalda keyingi bosqichlar uchun kontrakt
+taklifidir. Har bir implementatsiya qilingan endpointda serializer maydonlari,
+majburiy/ixtiyoriy holat, validatsiya xatolari, sahifalash va ruxsat sinflari
+hujjatlashtiriladi.
 
 ## 3. Tasdiqlangan qarorlar
 
@@ -167,5 +180,6 @@ kontrakt taklifidir, ishga tushadigan API emas.
 - Do‘kon, mahsulot va transport arxivlanadi; to‘lov qattiq o‘chirilmaydi.
 
 Ushbu qarorlar asosida modellar, migratsiyalar, seed buyrug‘i va tenant
-izolyatsiyasi testlari amalga oshirildi. API endpointlari va autentifikatsiya
-keyingi bosqichlar uchun qoldirildi.
+izolyatsiyasi testlari amalga oshirildi. Auth endpointlari va frontenddagi
+kirish/ro‘yxatdan o‘tish/profil oqimlari ham mavjud; katalog, buyurtma va
+reys interfeyslari keyingi bosqichlar uchun qoldirildi.

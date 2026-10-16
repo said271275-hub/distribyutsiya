@@ -17,8 +17,9 @@ kelishuvini belgilaydi.
 | `driver` | O‘ziga biriktirilgan reys va yetkazib berish nuqtalarini ko‘rish, holatni yangilash |
 | `shop_owner` | O‘z do‘koni katalogi, buyurtmalari, qarzi va tara hisobini ko‘rish |
 
-Rollar va ruxsatlar hozircha talab darajasida. Kirish, tokenlar, sessiyalar va
-rolga asoslangan amaldagi ruxsat tekshiruvlari keyingi bosqichga qoldiriladi.
+Kirish, tokenlar, sessiyalar va rolga asoslangan route/API poydevori
+2-bosqichda amalga oshiriladi; biznes endpointlarida rol va kompaniya
+cheklovlari ularning o‘zi 3–4-bosqichda yozilganda qo‘llanadi.
 
 ## Asosiy domen qoidalari
 
@@ -30,6 +31,7 @@ rolga asoslangan amaldagi ruxsat tekshiruvlari keyingi bosqichga qoldiriladi.
   tenant doirasidagi o‘qish va yozish amallari kompaniya bo‘yicha cheklanadi.
 - Do‘konning asosiy telefoni unikal; ikkinchi telefon ixtiyoriy va unikal
   bo‘lishi shart emas.
+- Bitta do‘kon akkaunti ko‘pi bilan bitta do‘konga ega bo‘ladi.
 - Buyurtma holatlari: `new`, `confirmed`, `loaded`, `in_transit`, `delivered`,
   `cancelled`.
 - Hisob-kitoblar tarixini yo‘qotmaslik uchun qarz va tara harakatlarini
@@ -41,9 +43,10 @@ rolga asoslangan amaldagi ruxsat tekshiruvlari keyingi bosqichga qoldiriladi.
 ## Amalga oshirish chegarasi
 
 Loyiha Django + DRF, PostgreSQL, React + Vite, Docker Compose va
-OpenAPI/Swagger uchun sozlangan. ERD tasdiqlangan; biznes modellari,
-migratsiyalar, seed buyrug‘i va tenant izolyatsiyasi testlari tayyor.
-Endpointlar, login oqimi va UI sahifalari keyingi bosqichlarga qoldirilgan.
+OpenAPI/Swagger uchun sozlangan. 2-bosqichda biznes modellari, migratsiyalar,
+seed buyrug‘i, autentifikatsiya, rolga asoslangan kirish himoyasi va tenant
+izolyatsiyasi poydevori amalga oshiriladi. `/api/docs/` hamda `/api/schema/`
+faqat ishlab chiqish rejimida ochiq.
 
-Hozircha UI sahifalari, marshrutlash, autentifikatsiya va biznes endpointlari
-ishlab chiqilmaydi.
+Katalog, buyurtma, to‘lov va reys biznes endpointlari hamda ularga mos UI
+sahifalari 3–4-bosqichlarga qoldiriladi.

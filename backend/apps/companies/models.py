@@ -49,6 +49,11 @@ class Shop(TimestampedModel):
 
     class Meta:
         ordering = ("name",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("owner",), name="uniq_shop_owner_account"
+            )
+        ]
 
     def clean(self):
         super().clean()

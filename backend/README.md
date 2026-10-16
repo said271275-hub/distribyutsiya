@@ -28,8 +28,35 @@ python manage.py runserver
 
 The API checks endpoint is `GET /api/health/`. Business models are grouped
 under `apps/accounts`, `apps/companies`, `apps/catalog`, `apps/orders`,
-`apps/logistics`, `apps/payments` and `apps/audit`. No login endpoints or
-frontend pages are implemented yet.
+`apps/logistics`, `apps/payments` and `apps/audit`. Authentication endpoints
+and the login/profile frontend flow are implemented; catalog, ordering and
+dispatch interfaces remain out of scope.
+
+## Authentication
+
+- Shop owners register with a phone number, one-time SMS code and password at
+  `POST /api/auth/register/otp/` and `POST /api/auth/register/`.
+- Shop-owner and employee login are separate: `/api/auth/login/` and
+  `/api/auth/staff/login/`. Employee accounts are created through Django
+  Admin; there is no public staff-registration endpoint.
+- Access JWTs last 10 minutes and are returned in the response body. Rotating
+  refresh JWTs are stored only in an HttpOnly, SameSite cookie at
+  `/api/auth/refresh/`; logout blacklists the refresh token. Unsafe auth
+  requests require the CSRF token from `GET /api/auth/csrf/`.
+- In `DEBUG` mode, OTP is sent through the mock provider and printed to the
+  backend console. Production refuses to send until an SMS provider (such as
+  Eskiz.uz) is configured with the `SMS_PROVIDER_CLASS` dotted import path.
+  Never use the mock provider in production.
+- Five failed login attempts block that phone/IP combination for 15 minutes;
+  registration OTP sends are limited to three per phone per 15 minutes.
+- Account deletion requests are confirmed with the current password. Run
+  `python manage.py process_account_deletions` from a daily scheduler to
+  anonymize requests whose 30-day recovery period has elapsed. Schedule
+  `python manage.py cleanup_auth_records` daily as well.
+
+Set `AUTH_COOKIE_SECURE=True` and use HTTPS outside local development. For
+cross-origin deployments, configure trusted CORS origins and CSRF origins
+explicitly. Refresh cookies use the configured `AUTH_COOKIE_SAMESITE` policy.
 
 ## Demo data and tests
 

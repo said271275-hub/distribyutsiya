@@ -122,6 +122,19 @@ class CompanyIsolationModelTests(TestCase):
                     phone="+998900000001", role=User.Role.SHOP_OWNER
                 )
 
+    def test_a_shop_owner_account_cannot_own_multiple_shops(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Shop.objects.create(
+                    owner=self.shop.owner,
+                    name="Ikkinchi do‘kon",
+                    phone_primary="+998900000006",
+                    address="Guliston",
+                    district="Guliston",
+                    latitude=Decimal("40.840000"),
+                    longitude=Decimal("68.660000"),
+                )
+
     def test_balance_entry_updates_cached_balance_only_once(self):
         entry = BalanceEntry.objects.create(
             company=self.company_a,

@@ -5,13 +5,25 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from apps.core.permissions import DevelopmentOnlyPermission
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", include("apps.core.urls")),
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/auth/", include("apps.accounts.urls")),
+    path(
+        "api/schema/",
+        SpectacularAPIView.as_view(
+            permission_classes=[DevelopmentOnlyPermission]
+        ),
+        name="schema",
+    ),
     path(
         "api/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
+        SpectacularSwaggerView.as_view(
+            url_name="schema",
+            permission_classes=[DevelopmentOnlyPermission],
+        ),
         name="swagger-ui",
     ),
 ]

@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -34,6 +35,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "drf_spectacular",
+    "rest_framework_simplejwt.token_blacklist",
     "apps.core",
     "apps.accounts",
     "apps.companies",
@@ -51,6 +53,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.accounts.middleware.CompanyTenantMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -112,13 +115,46 @@ CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.accounts.authentication.CookieAwareJWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_FILTER_BACKENDS": [
+        "apps.core.filters.CompanyTenantFilterBackend",
+    ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=10),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+AUTH_COOKIE_SECURE = env_bool("AUTH_COOKIE_SECURE", not DEBUG)
+AUTH_COOKIE_SAMESITE = os.environ.get("AUTH_COOKIE_SAMESITE", "Lax")
+if AUTH_COOKIE_SAMESITE.lower() == "none" and not AUTH_COOKIE_SECURE:
+    raise ImproperlyConfigured("SameSite=None refresh cookies require AUTH_COOKIE_SECURE=True.")
+AUTH_COOKIE_NAME = "distribyutsiya_refresh"
+AUTH_COOKIE_PATH = "/api/auth/"
+AUTH_COOKIE_HTTPONLY = True
+AUTH_COOKIE_MAX_AGE = int(SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
+AUTH_LOGIN_MAX_FAILURES = 5
+AUTH_LOGIN_BLOCK_MINUTES = 15
+AUTH_OTP_TTL_MINUTES = 5
+AUTH_OTP_SEND_LIMIT = 3
+AUTH_OTP_SEND_WINDOW_MINUTES = 15
+AUTH_OTP_MAX_FAILURES = 5
+SMS_PROVIDER_CLASS = os.environ.get("SMS_PROVIDER_CLASS", "")
+if DEBUG and not SMS_PROVIDER_CLASS:
+    SMS_PROVIDER_CLASS = "apps.accounts.sms.MockSMSProvider"
+
+CORS_ALLOW_CREDENTIALS = True
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SAMESITE = "Lax"
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Distribyutsiya API",
