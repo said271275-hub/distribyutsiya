@@ -48,6 +48,12 @@ const roleLabels: Record<UserRole, string> = {
   shop_owner: 'Do‘kon egasi',
 }
 
+function DevOtpBadge() {
+  return import.meta.env.DEV ? (
+    <span className="dev-otp-badge" role="status">SINOV REJIMI</span>
+  ) : null
+}
+
 function formatPhoneInput(value: string) {
   let digits = value.replace(/\D/g, '')
   if (digits.startsWith('998')) digits = digits.slice(3)
@@ -259,6 +265,7 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
   return (
     <AuthShell mode={staff ? 'staff' : 'shop'}>
       <div className="auth-heading">
+        <DevOtpBadge />
         <span className="section-kicker">{staff ? 'XODIMLAR MAYDONI' : 'XUSH KELIBSIZ'}</span>
         <h2>{restoreMode ? 'Akkauntni tiklash' : staff ? 'Jamoa uchun kirish' : 'Hisobingizga kiring'}</h2>
         <p>
@@ -370,6 +377,7 @@ function RegisterPage() {
   return (
     <AuthShell>
       <div className="auth-heading">
+        <DevOtpBadge />
         <span className="section-kicker">DO‘KONCHI UCHUN</span>
         <h2>Yangi akkaunt yarating</h2>
         <p>Bir necha qadamda hisob ochib, tizimdan foydalanishni boshlang.</p>

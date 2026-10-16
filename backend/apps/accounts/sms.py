@@ -1,25 +1,29 @@
-import logging
 from typing import Protocol
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
 
-logger = logging.getLogger(__name__)
 
+class OTPProvider(Protocol):
+    def generate_code(self) -> str: ...
 
-class SMSProvider(Protocol):
     def send(self, phone: str, message: str) -> None: ...
 
 
-class MockSMSProvider:
+class DevOtpProvider:
+    def generate_code(self) -> str:
+        if not settings.DEV_OTP_ENABLED:
+            raise ImproperlyConfigured("Dev OTP faqat DEV_OTP_ENABLED=True bo‘lganda ishlaydi.")
+        return settings.DEV_OTP_CODE
+
     def send(self, phone: str, message: str) -> None:
-        logger.warning("Mock SMS to %s: %s", phone, message)
+        return None
 
 
-def get_sms_provider() -> SMSProvider:
-    provider_path = settings.SMS_PROVIDER_CLASS
+def get_otp_provider() -> OTPProvider:
+    provider_path = settings.OTP_PROVIDER
     if not provider_path:
-        raise ImproperlyConfigured("SMS_PROVIDER_CLASS sozlanmagan.")
+        raise ImproperlyConfigured("OTP_PROVIDER sozlanmagan.")
     provider_class = import_string(provider_path)
     return provider_class()

@@ -43,10 +43,10 @@ dispatch interfaces remain out of scope.
   refresh JWTs are stored only in an HttpOnly, SameSite cookie at
   `/api/auth/refresh/`; logout blacklists the refresh token. Unsafe auth
   requests require the CSRF token from `GET /api/auth/csrf/`.
-- In `DEBUG` mode, OTP is sent through the mock provider and printed to the
-  backend console. Production refuses to send until an SMS provider (such as
-  Eskiz.uz) is configured with the `SMS_PROVIDER_CLASS` dotted import path.
-  Never use the mock provider in production.
+- OTP delivery is selected with the `OTP_PROVIDER` dotted import path. The
+  development provider does not send SMS; when `DEV_OTP_ENABLED=True`, it
+  accepts the `DEV_OTP_CODE` value from the environment. This flag defaults to
+  false and cannot be enabled when `DEBUG=False`.
 - Five failed login attempts block that phone/IP combination for 15 minutes;
   registration OTP sends are limited to three per phone per 15 minutes.
 - Account deletion requests are confirmed with the current password. Run
@@ -84,3 +84,5 @@ The `.env.example` values are strictly for local development. Set a unique,
 strong `DJANGO_SECRET_KEY`, production hosts and HTTPS-related settings before
 deploying. Keep `.env` out of source control. Do not use Django's development
 server in production.
+
+Before production: `DEV_OTP_ENABLED=false`, connect `EskizOtpProvider`.

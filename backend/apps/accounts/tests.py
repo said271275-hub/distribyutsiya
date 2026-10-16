@@ -1,8 +1,12 @@
-import re
+import os
+import secrets
+import subprocess
+import sys
 from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
-from unittest.mock import Mock, patch
+from pathlib import Path
+from unittest.mock import patch
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
@@ -21,7 +25,7 @@ from apps.accounts.models import (
     User,
 )
 from apps.accounts.services import normalize_uz_phone
-from apps.accounts.sms import MockSMSProvider, get_sms_provider
+from apps.accounts.sms import DevOtpProvider, get_otp_provider
 from apps.audit.models import AuditLog
 from apps.companies.models import Company, CompanyShopLink, Shop
 from apps.core.permissions import (
@@ -38,6 +42,7 @@ from apps.orders.models import Order
 from apps.payments.models import ShopBalance
 
 PASSWORD = "Sirdaryo!StrongPassword938"
+DEV_TEST_OTP_CODE = f"{secrets.randbelow(1_000_000):06d}"
 
 
 class OrderSummarySerializer(serializers.Serializer):
@@ -205,23 +210,24 @@ class AuthFlowTests(TestCase):
         self.assertEqual(self.login(phone=self.staff_user.phone).status_code, 401)
 
     def test_registration_uses_one_time_sms_code_and_phone_is_unique(self):
-        sms = Mock()
-        with patch("apps.accounts.sms.get_sms_provider", return_value=sms):
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
             requested = self.client.post(
                 "/api/auth/register/otp/",
                 {"phone": "90 555 66 77"},
                 format="json",
             )
         self.assertEqual(requested.status_code, 202)
-        message = sms.send.call_args.args[1]
-        code = re.search(r"\d{6}", message).group()
-        self.assertNotIn(code, str(requested.data))
+        self.assertNotIn(DEV_TEST_OTP_CODE, str(requested.data))
 
         registered = self.client.post(
             "/api/auth/register/",
             {
                 "phone": "+998905556677",
-                "code": code,
+                "code": DEV_TEST_OTP_CODE,
                 "password": PASSWORD,
                 "role": User.Role.DRIVER,
                 "company_id": self.company_a.pk,
@@ -244,8 +250,11 @@ class AuthFlowTests(TestCase):
         self.assertEqual(duplicate.status_code, 400)
 
     def test_wrong_otp_attempts_are_limited_and_persisted(self):
-        sms = Mock()
-        with patch("apps.accounts.sms.get_sms_provider", return_value=sms):
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
             self.client.post(
                 "/api/auth/register/otp/",
                 {"phone": "+998905551010"},
@@ -263,8 +272,11 @@ class AuthFlowTests(TestCase):
         self.assertIsNotNone(otp.consumed_at)
 
     def test_sms_send_rate_limit_is_three_codes_per_phone(self):
-        sms = Mock()
-        with patch("apps.accounts.sms.get_sms_provider", return_value=sms):
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
             responses = [
                 self.client.post(
                     "/api/auth/register/otp/",
@@ -274,14 +286,47 @@ class AuthFlowTests(TestCase):
                 for _ in range(4)
             ]
         self.assertEqual([response.status_code for response in responses], [202, 202, 202, 400])
-        self.assertEqual(sms.send.call_count, 3)
+        self.assertEqual(PhoneOTP.objects.filter(phone="+998905551011").count(), 3)
 
-    def test_sms_provider_is_configurable_and_missing_provider_fails_explicitly(self):
-        with override_settings(SMS_PROVIDER_CLASS="apps.accounts.sms.MockSMSProvider"):
-            self.assertIsInstance(get_sms_provider(), MockSMSProvider)
-        with override_settings(SMS_PROVIDER_CLASS=""):
+    def test_dev_otp_provider_uses_configured_code_without_sending_sms(self):
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
+            provider = get_otp_provider()
+            self.assertIsInstance(provider, DevOtpProvider)
+            self.assertEqual(provider.generate_code(), DEV_TEST_OTP_CODE)
+            self.assertIsNone(provider.send("+998901234567", DEV_TEST_OTP_CODE))
+
+        with override_settings(DEV_OTP_ENABLED=False):
             with self.assertRaises(ImproperlyConfigured):
-                get_sms_provider()
+                DevOtpProvider().generate_code()
+
+        with override_settings(OTP_PROVIDER=""):
+            with self.assertRaises(ImproperlyConfigured):
+                get_otp_provider()
+
+    def test_dev_otp_is_rejected_during_production_settings_load(self):
+        environment = os.environ.copy()
+        environment.update(
+            DJANGO_SECRET_KEY="test-only-secret-key-long-enough-for-hmac",
+            DJANGO_DEBUG="False",
+            DEV_OTP_ENABLED="True",
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", "import config.settings"],
+            cwd=Path(__file__).resolve().parents[2],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ImproperlyConfigured", result.stderr)
+        self.assertIn("DEV_OTP_ENABLED", result.stderr)
 
     def test_five_failed_logins_create_a_temporary_block(self):
         for index in range(5):

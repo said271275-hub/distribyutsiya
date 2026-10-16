@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -148,9 +149,13 @@ AUTH_OTP_TTL_MINUTES = 5
 AUTH_OTP_SEND_LIMIT = 3
 AUTH_OTP_SEND_WINDOW_MINUTES = 15
 AUTH_OTP_MAX_FAILURES = 5
-SMS_PROVIDER_CLASS = os.environ.get("SMS_PROVIDER_CLASS", "")
-if DEBUG and not SMS_PROVIDER_CLASS:
-    SMS_PROVIDER_CLASS = "apps.accounts.sms.MockSMSProvider"
+OTP_PROVIDER = os.environ.get("OTP_PROVIDER", "")
+DEV_OTP_ENABLED = env_bool("DEV_OTP_ENABLED", False)
+DEV_OTP_CODE = os.environ.get("DEV_OTP_CODE", "")
+if not DEBUG and DEV_OTP_ENABLED:
+    raise ImproperlyConfigured("DEV_OTP_ENABLED production rejimida yoqilishi mumkin emas.")
+if DEV_OTP_ENABLED and not re.fullmatch(r"\d{6}", DEV_OTP_CODE):
+    raise ImproperlyConfigured("DEV_OTP_ENABLED uchun DEV_OTP_CODE 6 xonali bo‘lishi kerak.")
 
 CORS_ALLOW_CREDENTIALS = True
 CSRF_COOKIE_SAMESITE = "Lax"

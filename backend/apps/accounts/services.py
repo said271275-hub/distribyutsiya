@@ -1,5 +1,4 @@
 import hmac
-import secrets
 from datetime import timedelta
 
 from django.conf import settings
@@ -47,7 +46,10 @@ def send_registration_otp(phone: str) -> None:
     now = timezone.now()
     if User.objects.filter(phone=phone).exists():
         raise ValidationError({"phone": "Bu telefon raqami allaqachon ro‘yxatdan o‘tgan."})
-    code = f"{secrets.randbelow(1_000_000):06d}"
+    from apps.accounts.sms import get_otp_provider
+
+    provider = get_otp_provider()
+    code = provider.generate_code()
     with transaction.atomic():
         window, _ = PhoneOTPSendWindow.objects.select_for_update().get_or_create(
             phone=phone,
@@ -70,9 +72,7 @@ def send_registration_otp(phone: str) -> None:
             code_hash=_otp_digest(code),
             expires_at=now + timedelta(minutes=settings.AUTH_OTP_TTL_MINUTES),
         )
-    from apps.accounts.sms import get_sms_provider
-
-    get_sms_provider().send(phone, f"Ro‘yxatdan o‘tish kodi: {code}")
+    provider.send(phone, f"Ro‘yxatdan o‘tish kodi: {code}")
 
 
 def consume_registration_otp(phone: str, code: str) -> None:
