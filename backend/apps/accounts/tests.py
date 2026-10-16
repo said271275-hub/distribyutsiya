@@ -481,6 +481,20 @@ class AuthFlowTests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+        company_page_request = factory.get(f"/api/test/orders/{self.order_a.pk}/")
+        force_authenticate(company_page_request, user=self.shop_user)
+        response = CompanyOrderDetailView.as_view()(
+            company_page_request, pk=self.order_a.pk
+        )
+        self.assertEqual(response.status_code, 403)
+
+        shop_page_request = factory.get(f"/api/test/orders/{self.order_a.pk}/")
+        force_authenticate(shop_page_request, user=self.staff_user)
+        response = ShopOrderDetailView.as_view()(
+            shop_page_request, pk=self.order_a.pk
+        )
+        self.assertEqual(response.status_code, 403)
+
         automatic_request = factory.get(f"/api/test/orders/{self.order_b.pk}/")
         force_authenticate(automatic_request, user=self.staff_user)
         response = AutomaticTenantOrderDetailView.as_view()(
@@ -519,7 +533,7 @@ class AuthFlowTests(TestCase):
 
     def test_company_admin_tenant_filter_limits_company_shop_links(self):
         request = APIRequestFactory().get("/api/v1/companies/shops/")
-        force_authenticate(request, user=self.staff_user)
+        request.user = self.staff_user
 
         links = CompanyTenantFilterBackend().filter_queryset(
             request, CompanyShopLink.objects.all(), view=None
@@ -528,6 +542,22 @@ class AuthFlowTests(TestCase):
         self.assertEqual(
             list(links.values_list("company_id", flat=True)), [self.company_a.pk]
         )
+
+    def test_company_admin_permission_is_limited_to_company_staff(self):
+        permission = CompanyAdminPermission()
+        factory = APIRequestFactory()
+
+        for user in (self.staff_user, User.objects.create_superuser(
+            phone="+998906666666", password=PASSWORD
+        )):
+            request = factory.post("/api/v1/payments/")
+            request.user = user
+            self.assertTrue(permission.has_permission(request, None))
+
+        for user in (self.shop_user, self.driver_user):
+            request = factory.post("/api/v1/payments/")
+            request.user = user
+            self.assertFalse(permission.has_permission(request, None))
 
     def test_role_and_company_changes_are_audited(self):
         self.driver_user.role = User.Role.COMPANY_ADMIN

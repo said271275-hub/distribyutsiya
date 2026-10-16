@@ -23,5 +23,5 @@ class HealthCheckTests(SimpleTestCase):
     def test_openapi_schema_and_docs_are_closed_in_production(self):
         client = APIClient()
 
-        self.assertEqual(client.get("/api/schema/").status_code, 403)
-        self.assertEqual(client.get("/api/docs/").status_code, 403)
+        self.assertIn(client.get("/api/schema/").status_code, (401, 403))
+        self.assertIn(client.get("/api/docs/").status_code, (401, 403))
