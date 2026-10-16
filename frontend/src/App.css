@@ -490,6 +490,41 @@ button:disabled {
   font-weight: 750;
 }
 
+.shop-map-loading {
+  display: grid;
+  height: 290px;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.shop-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.shop-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.shop-pagination button {
+  min-height: 34px;
+}
+
+.shop-pagination button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 .auth-heading h2 {
   margin: 10px 0 8px;
   color: var(--ink);

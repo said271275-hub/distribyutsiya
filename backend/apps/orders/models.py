@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -56,13 +58,28 @@ class Order(CompanyOwnedModel):
         self.save(update_fields=("total_price", "updated_at"))
 
 
+class OrderStatusHistory(models.Model):
+    order = models.ForeignKey(
+        Order, on_delete=models.CASCADE, related_name="status_history"
+    )
+    status = models.CharField(max_length=12, choices=Order.Status.choices)
+    actor = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    note = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
+
+
 class OrderItem(CompanyOwnedModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(
         "catalog.Product", on_delete=models.PROTECT, related_name="order_items"
     )
     quantity = models.DecimalField(
-        max_digits=12, decimal_places=2, validators=(MinValueValidator(0.01),)
+        max_digits=12, decimal_places=2, validators=(MinValueValidator(Decimal("0.01")),)
     )
     unit_price = models.DecimalField(
         max_digits=12, decimal_places=2, validators=(MinValueValidator(0),)

@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Controller, useForm, type Control } from 'react-hook-form'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
@@ -8,6 +8,8 @@ import { useAuth } from './useAuth'
 import api, { apiErrorMessage, type UserRole } from './api'
 import { canAccessRoles, roleHomes } from './roleAccess'
 import './App.css'
+
+const ShopPanel = lazy(() => import('./ShopPanel'))
 
 const phoneSchema = z
   .string()
@@ -660,7 +662,7 @@ function App() {
       <Route path="/admin" element={<ProtectedRoute roles={['super_admin']}><RoleLandingPage /></ProtectedRoute>} />
       <Route path="/company" element={<ProtectedRoute roles={['company_admin']}><RoleLandingPage /></ProtectedRoute>} />
       <Route path="/driver" element={<ProtectedRoute roles={['driver']}><RoleLandingPage /></ProtectedRoute>} />
-      <Route path="/shop" element={<ProtectedRoute roles={['shop_owner']}><RoleLandingPage /></ProtectedRoute>} />
+      <Route path="/shop/*" element={<ProtectedRoute roles={['shop_owner']}><Suspense fallback={<main className="full-loader">Yuklanmoqda…</main>}><ShopPanel /></Suspense></ProtectedRoute>} />
       <Route path="*" element={<IndexRedirect />} />
     </Routes>
   )

@@ -1,0 +1,82 @@
+from decimal import Decimal
+
+from django.shortcuts import get_object_or_404
+from rest_framework import serializers
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
+
+from apps.companies.models import CompanyShopLink, Shop
+from apps.core.permissions import ShopOwnerPermission
+from apps.payments.models import Payment, ShopBalance
+
+
+class ShopCompanyBalanceSerializer(serializers.Serializer):
+    company_id = serializers.IntegerField()
+    company_name = serializers.CharField()
+    balance = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+class ShopPaymentHistorySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    company_id = serializers.IntegerField()
+    company_name = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    method = serializers.CharField()
+    status = serializers.CharField()
+    paid_at = serializers.DateTimeField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    reference = serializers.CharField()
+
+
+class ShopFinanceSerializer(serializers.Serializer):
+    balance = serializers.DecimalField(max_digits=14, decimal_places=2)
+    balances = ShopCompanyBalanceSerializer(many=True)
+    payments = ShopPaymentHistorySerializer(many=True)
+
+
+class ShopFinanceView(APIView):
+    permission_classes = (IsAuthenticated, ShopOwnerPermission)
+
+    @extend_schema(responses=ShopFinanceSerializer)
+    def get(self, request):
+        shop = get_object_or_404(Shop, owner=request.user)
+        links = list(
+            CompanyShopLink.objects.filter(
+                shop=shop, is_active=True, company__is_active=True
+            ).select_related("company")
+        )
+        balances = []
+        total = Decimal("0.00")
+        for link in links:
+            balance = ShopBalance.objects.filter(
+                company=link.company, shop=shop
+            ).values_list("current_balance", flat=True).first() or Decimal("0.00")
+            total += balance
+            balances.append({
+                "company_id": link.company_id,
+                "company_name": link.company.name,
+                "balance": str(balance),
+            })
+        payments = Payment.objects.filter(
+            shop=shop, company_id__in=[link.company_id for link in links]
+        ).select_related("company")[:50]
+        return Response({
+            "balance": str(total),
+            "balances": balances,
+            "payments": [
+                {
+                    "id": payment.pk,
+                    "company_id": payment.company_id,
+                    "company_name": payment.company.name,
+                    "amount": str(payment.amount),
+                    "method": payment.method,
+                    "status": payment.status,
+                    "paid_at": payment.paid_at,
+                    "created_at": payment.created_at,
+                    "reference": payment.reference,
+                }
+                for payment in payments
+            ],
+        })

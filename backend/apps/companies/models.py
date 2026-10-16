@@ -1,3 +1,5 @@
+from datetime import time
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -11,6 +13,7 @@ class Company(TimestampedModel):
     brand_color = models.CharField(max_length=7, blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)
     is_active = models.BooleanField(default=True)
+    order_cutoff_time = models.TimeField(default=time(18, 0))
 
     class Meta:
         ordering = ("name",)
@@ -29,6 +32,7 @@ class Shop(TimestampedModel):
         "accounts.User", on_delete=models.PROTECT, related_name="shops"
     )
     name = models.CharField(max_length=200)
+    owner_name = models.CharField(max_length=200, blank=True)
     phone_primary = models.CharField(max_length=20, unique=True)
     phone_secondary = models.CharField(max_length=20, blank=True)
     address = models.CharField(max_length=500)
