@@ -17,6 +17,21 @@ class HealthCheckTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"/api/health/", response.content)
         self.assertIn(b"/api/auth/staff/login/", response.content)
+        for path in (
+            "/api/v1/admin/orders/",
+            "/api/v1/admin/orders/{id}/status/",
+            "/api/v1/admin/orders/bulk-confirm/",
+            "/api/v1/admin/orders/picking-list/",
+            "/api/v1/admin/products/",
+            "/api/v1/admin/shop-prices/",
+            "/api/v1/admin/shops/",
+            "/api/v1/admin/vehicles/",
+            "/api/v1/admin/drivers/",
+            "/api/v1/admin/staff/",
+            "/api/v1/admin/payments/",
+            "/api/v1/admin/balances/",
+        ):
+            self.assertIn(path.encode(), response.content)
         self.assertEqual(docs_response.status_code, 200)
 
     @override_settings(DEBUG=False)

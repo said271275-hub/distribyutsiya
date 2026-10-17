@@ -13,6 +13,13 @@ from apps.core.admin_api import (
     StaffAdminViewSet,
     VehicleAdminViewSet,
 )
+from apps.logistics.trips_api import (
+    DashboardView,
+    DriverTripListView,
+    RouteSettingsView,
+    TripAdminViewSet,
+    TripStopOrdersView,
+)
 from apps.companies.shop_api import ShopCompanyListView, ShopProfileView
 from apps.orders.shop_api import (
     ShopOrderCancelView,
@@ -34,6 +41,7 @@ admin_router.register("drivers", DriverAdminViewSet, basename="admin-drivers")
 admin_router.register("staff", StaffAdminViewSet, basename="admin-staff")
 admin_router.register("payments", PaymentAdminViewSet, basename="admin-payments")
 admin_router.register("balances", BalanceAdminViewSet, basename="admin-balances")
+admin_router.register("trips", TripAdminViewSet, basename="admin-trips")
 
 
 urlpatterns = [
@@ -47,4 +55,12 @@ urlpatterns = [
     path("orders/<int:pk>/cancel/", ShopOrderCancelView.as_view(), name="shop-order-cancel"),
     path("orders/<int:pk>/repeat/", ShopOrderRepeatView.as_view(), name="shop-order-repeat"),
     path("shop/finance/", ShopFinanceView.as_view(), name="shop-finance"),
+    path("admin/route-settings/", RouteSettingsView.as_view(), name="admin-route-settings"),
+    path("admin/dashboard/", DashboardView.as_view(), name="admin-dashboard"),
+    path(
+        "admin/trips/<int:trip_id>/stops/<int:stop_id>/orders/",
+        TripStopOrdersView.as_view(),
+        name="admin-trip-stop-orders",
+    ),
+    path("driver/trips/", DriverTripListView.as_view(), name="driver-trips"),
 ]

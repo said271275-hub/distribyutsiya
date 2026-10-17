@@ -16,7 +16,7 @@ from apps.catalog.models import Product
 from apps.catalog.shop_api import ShopCatalogProductSerializer
 from apps.companies.models import CompanyShopLink, Shop, ShopPrice
 from apps.core.permissions import ShopOwnerPermission
-from apps.logistics.models import TripStopOrder
+from apps.logistics.models import Trip, TripStopOrder
 from apps.orders.models import Order, OrderItem, OrderStatusHistory
 from apps.orders.shop_services import cancel_shop_order, create_shop_order, update_shop_order
 
@@ -96,6 +96,8 @@ class ShopOrderSerializer(serializers.ModelSerializer):
     items = OrderLineSerializer(many=True, read_only=True)
     status_history = OrderStatusHistorySerializer(many=True, read_only=True)
     eta = serializers.SerializerMethodField()
+    eta_window_from = serializers.SerializerMethodField()
+    eta_window_to = serializers.SerializerMethodField()
     driver_phone = serializers.SerializerMethodField()
 
     class Meta:
@@ -103,21 +105,37 @@ class ShopOrderSerializer(serializers.ModelSerializer):
         fields = (
             "id", "company_id", "company_name", "shop_id", "status", "delivery_date",
             "delivery_time_from", "delivery_time_to", "total_price", "note", "items",
-            "status_history", "eta", "driver_phone", "created_at", "updated_at",
+            "status_history", "eta", "eta_window_from", "eta_window_to",
+            "driver_phone", "created_at", "updated_at",
         )
 
     def _trip_stop(self, order):
         links = getattr(order, "shop_trip_links", None)
         if links is None:
-            links = order.trip_stop_links.select_related(
+            links = order.trip_stop_links.filter(
+                trip_stop__trip__status__in=(
+                    Trip.Status.CONFIRMED,
+                    Trip.Status.IN_PROGRESS,
+                )
+            ).select_related(
                 "trip_stop__trip__driver__user"
-            ).all()
+            ).order_by("trip_stop__sequence")
         return links[0].trip_stop if links else None
 
     @extend_schema_field(OpenApiTypes.DATETIME)
     def get_eta(self, order):
         stop = self._trip_stop(order)
         return stop.eta if stop else None
+
+    @extend_schema_field(OpenApiTypes.DATETIME)
+    def get_eta_window_from(self, order):
+        stop = self._trip_stop(order)
+        return stop.eta_window_from if stop else None
+
+    @extend_schema_field(OpenApiTypes.DATETIME)
+    def get_eta_window_to(self, order):
+        stop = self._trip_stop(order)
+        return stop.eta_window_to if stop else None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_driver_phone(self, order):
@@ -141,7 +159,12 @@ class ShopOrderBaseView(APIView):
                 "status_history__actor",
                 Prefetch(
                     "trip_stop_links",
-                    queryset=TripStopOrder.objects.select_related(
+                    queryset=TripStopOrder.objects.filter(
+                        trip_stop__trip__status__in=(
+                            Trip.Status.CONFIRMED,
+                            Trip.Status.IN_PROGRESS,
+                        )
+                    ).select_related(
                         "trip_stop__trip__driver__user"
                     ),
                     to_attr="shop_trip_links",
@@ -158,7 +181,20 @@ class ShopOrderListCreateView(ShopOrderBaseView):
         orders = (
             Order.objects.filter(shop=shop)
             .select_related("company")
-            .prefetch_related("items__product", "status_history__actor")
+            .prefetch_related(
+                "items__product",
+                "status_history__actor",
+                Prefetch(
+                    "trip_stop_links",
+                    queryset=TripStopOrder.objects.filter(
+                        trip_stop__trip__status__in=(
+                            Trip.Status.CONFIRMED,
+                            Trip.Status.IN_PROGRESS,
+                        )
+                    ).select_related("trip_stop__trip__driver__user"),
+                    to_attr="shop_trip_links",
+                ),
+            )
         )
         status_filter = request.query_params.get("status")
         if status_filter:

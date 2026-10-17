@@ -43,9 +43,14 @@ class DriverProfile(CompanyOwnedModel):
 class Trip(CompanyOwnedModel):
     class Status(models.TextChoices):
         PLANNED = "planned", "Rejalashtirilgan"
+        CONFIRMED = "confirmed", "Tasdiqlangan"
         IN_PROGRESS = "in_progress", "Yo‘lda"
         COMPLETED = "completed", "Yakunlangan"
         CANCELLED = "cancelled", "Bekor qilingan"
+
+    class RoutingSource(models.TextChoices):
+        OSRM = "osrm", "OSRM"
+        FALLBACK = "fallback", "Zaxira hisob"
 
     date = models.DateField()
     vehicle = models.ForeignKey(
@@ -56,6 +61,10 @@ class Trip(CompanyOwnedModel):
     )
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.PLANNED
+    )
+    routing_source = models.CharField(
+        max_length=12, choices=RoutingSource.choices,
+        default=RoutingSource.FALLBACK,
     )
 
     def clean(self):
@@ -76,6 +85,8 @@ class TripStop(CompanyOwnedModel):
     )
     sequence = models.PositiveIntegerField()
     eta = models.DateTimeField(null=True, blank=True)
+    eta_window_from = models.DateTimeField(null=True, blank=True)
+    eta_window_to = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     note = models.TextField(blank=True)
     orders = models.ManyToManyField(

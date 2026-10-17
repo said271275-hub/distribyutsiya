@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -161,6 +162,32 @@ if not DEBUG and DEV_OTP_ENABLED:
     raise ImproperlyConfigured("DEV_OTP_ENABLED production rejimida yoqilishi mumkin emas.")
 if DEV_OTP_ENABLED and not re.fullmatch(r"\d{6}", DEV_OTP_CODE):
     raise ImproperlyConfigured("DEV_OTP_ENABLED uchun DEV_OTP_CODE 6 xonali bo‘lishi kerak.")
+
+ROUTING_EXTERNAL_ENABLED = env_bool("ROUTING_EXTERNAL_ENABLED", DEBUG)
+OSRM_BASE_URL = os.environ.get(
+    "OSRM_BASE_URL",
+    "https://router.project-osrm.org" if DEBUG else "",
+).rstrip("/")
+ROUTING_TIMEOUT_SECONDS = int(os.environ.get("ROUTING_TIMEOUT_SECONDS", "5"))
+ROUTE_START_TIME = time.fromisoformat(os.environ.get("ROUTE_START_TIME", "08:00"))
+ETA_WINDOW_MINUTES = int(os.environ.get("ETA_WINDOW_MINUTES", "45"))
+TRIP_CLUSTER_RADIUS_KM = float(os.environ.get("TRIP_CLUSTER_RADIUS_KM", "8"))
+if ROUTING_TIMEOUT_SECONDS < 1 or ETA_WINDOW_MINUTES < 1 or TRIP_CLUSTER_RADIUS_KM <= 0:
+    raise ImproperlyConfigured(
+        "Routing timeout, ETA window va trip cluster radius musbat bo‘lishi kerak."
+    )
+if ROUTING_EXTERNAL_ENABLED and not OSRM_BASE_URL:
+    raise ImproperlyConfigured(
+        "ROUTING_EXTERNAL_ENABLED=True bo‘lsa OSRM_BASE_URL sozlanishi kerak."
+    )
+if (
+    not DEBUG
+    and ROUTING_EXTERNAL_ENABLED
+    and "router.project-osrm.org" in OSRM_BASE_URL.lower()
+):
+    raise ImproperlyConfigured(
+        "Production muhitida ommaviy OSRM demo serveridan foydalanmang."
+    )
 
 CORS_ALLOW_CREDENTIALS = True
 CSRF_COOKIE_SAMESITE = "Lax"

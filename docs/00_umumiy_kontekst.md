@@ -43,10 +43,23 @@ cheklovlari ularning o‘zi 3–4-bosqichda yozilganda qo‘llanadi.
 ## Amalga oshirish chegarasi
 
 Loyiha Django + DRF, PostgreSQL, React + Vite, Docker Compose va
-OpenAPI/Swagger uchun sozlangan. 2-bosqichda biznes modellari, migratsiyalar,
-seed buyrug‘i, autentifikatsiya, rolga asoslangan kirish himoyasi va tenant
-izolyatsiyasi poydevori amalga oshiriladi. `/api/docs/` hamda `/api/schema/`
-faqat ishlab chiqish rejimida ochiq.
+OpenAPI/Swagger uchun sozlangan. 2-bosqichning backend poydevori,
+autentifikatsiya va tenant izolyatsiyasi, 3-bosqichning do‘konchi oqimi hamda
+4A-qismning admin API’lari amalga oshirilgan. `/api/docs/` hamda
+`/api/schema/` faqat ishlab chiqish rejimida ochiq.
 
-Katalog, buyurtma, to‘lov va reys biznes endpointlari hamda ularga mos UI
-sahifalari 3–4-bosqichlarga qoldiriladi.
+4B backend qismida buyurtmalarni reys takliflariga guruhlash, reys va
+to‘xtashlarni boshqarish, yo‘l tartibi, ETA vaqt oralig‘i, kompaniya
+dashboardi va haydovchining o‘z reyslarini o‘qish API’lari amalga oshirilgan.
+Guruhlash avval tuman bo‘yicha, keyin koordinatalar markaziga nisbatan
+sozlanadigan radius ichida klasterlash orqali ishlaydi; nuqtalar nearest-neighbor
+masofa heuristikasi bilan tartiblanadi. Sig‘im uchun barcha mahsulotlarda vazn
+bo‘lsa vazn, aks holda barcha mahsulotlarda hajm bo‘lsa hajm ishlatiladi;
+aralash/yetishmayotgan o‘lchovda sig‘im noma’lum deb qoldiriladi.
+
+OSRM masofa-vaqt jadvali ishlatilishi mumkin; muvaffaqiyatsiz yoki o‘chirilgan
+tashqi marshrutlashda haversine masofasi va kompaniya o‘rtacha tezligiga
+asoslangan fallback ishlaydi. Ommaviy OSRM demo serveri faqat lokal sinov
+uchun; production’da self-hosted OSRM ishlating. OpenRouteService alohida
+adapter talab qiladi. 4C frontend xaritasi va haydovchi interfeysi 5-bosqichda
+alohida bajariladi.

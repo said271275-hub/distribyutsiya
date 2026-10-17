@@ -14,6 +14,8 @@ class Company(TimestampedModel):
     contact_phone = models.CharField(max_length=20, blank=True)
     is_active = models.BooleanField(default=True)
     order_cutoff_time = models.TimeField(default=time(18, 0))
+    stop_duration_minutes = models.PositiveSmallIntegerField(default=15)
+    average_route_speed_kph = models.PositiveSmallIntegerField(default=35)
 
     class Meta:
         ordering = ("name",)

@@ -1,22 +1,23 @@
-# Frontend
+# Foydalanuvchi qismi
 
-React + TypeScript + Vite client. It communicates with the backend through
-REST endpoints under `/api/`; Vite proxies those requests during development.
-Tailwind CSS is configured through its Vite plugin.
+React + TypeScript + Vite mijoz dasturi. U server bilan `/api/` ostidagi
+REST manzillari orqali ishlaydi; ishlab chiqish vaqtida Vite bu so‘rovlarni
+serverga yo‘naltiradi. Tailwind CSS Vite qo‘shimchasi orqali sozlangan.
 
-## Run locally
+## Mahalliy ishga tushirish
 
 ```powershell
 npm.cmd install
 npm.cmd run dev
 ```
 
-The Vite server is available at `http://localhost:5173`. For a production
-bundle, run `npm.cmd run build`.
+Vite serveri `http://localhost:5173` manzilida ishlaydi. Ishlab chiqarish
+uchun yig‘ilmani tayyorlash uchun `npm.cmd run build` buyrug‘ini bajaring.
 
-The client provides separate shop-owner and staff sign-in, phone/OTP
-registration, role-protected placeholder panels and an account
-deletion/recovery flow. The refresh token stays in an HttpOnly cookie; access
-tokens are held in memory and renewed through the API wrapper. Business pages
-(catalog, orders and trips) are not part of this stage. Database access and
-secrets belong in the backend, not in browser code.
+Mijoz dasturida do‘kon egalari va xodimlar uchun alohida kirish, telefon va
+bir martalik kod orqali ro‘yxatdan o‘tish, rol bo‘yicha himoyalangan namunaviy
+oynalar hamda hisobni o‘chirish va tiklash jarayoni bor. Yangilash belgisi
+HttpOnly brauzer cookie’sida saqlanadi; kirish belgilari xotirada turadi va
+API vositasi orqali yangilanadi. Katalog, buyurtma va reys sahifalari bu
+bosqichga kirmaydi. Ma’lumotlar bazasiga kirish va maxfiy qiymatlar server
+tomonida bo‘lishi, brauzer kodiga kiritilmasligi kerak.
