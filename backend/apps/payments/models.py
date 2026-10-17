@@ -48,6 +48,10 @@ class ShopBalance(CompanyOwnedModel):
         "companies.Shop", on_delete=models.PROTECT, related_name="balances"
     )
     current_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    credit_limit = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        validators=(MinValueValidator(0),),
+    )
 
     class Meta:
         constraints = [
@@ -83,7 +87,12 @@ class BalanceEntry(CompanyOwnedModel):
     class Meta:
         ordering = ("-created_at",)
         constraints = [
-            models.CheckConstraint(condition=models.Q(amount__gt=0), name="balance_entry_amount_positive")
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="balance_entry_amount_positive"),
+            models.UniqueConstraint(
+                fields=("payment",),
+                condition=models.Q(payment__isnull=False),
+                name="uniq_balance_entry_per_payment",
+            ),
         ]
 
     def clean(self):

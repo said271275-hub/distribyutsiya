@@ -152,6 +152,11 @@ AUTH_OTP_MAX_FAILURES = 5
 OTP_PROVIDER = os.environ.get("OTP_PROVIDER", "")
 DEV_OTP_ENABLED = env_bool("DEV_OTP_ENABLED", False)
 DEV_OTP_CODE = os.environ.get("DEV_OTP_CODE", "")
+DEV_STAFF_PASSWORD = os.environ.get("DEV_STAFF_PASSWORD", "")
+if DEV_STAFF_PASSWORD and (not DEBUG or not DEV_OTP_ENABLED):
+    raise ImproperlyConfigured(
+        "DEV_STAFF_PASSWORD faqat DJANGO_DEBUG=True va DEV_OTP_ENABLED=True bo‘lganda ishlaydi."
+    )
 if not DEBUG and DEV_OTP_ENABLED:
     raise ImproperlyConfigured("DEV_OTP_ENABLED production rejimida yoqilishi mumkin emas.")
 if DEV_OTP_ENABLED and not re.fullmatch(r"\d{6}", DEV_OTP_CODE):

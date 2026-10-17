@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -68,6 +69,9 @@ class Command(BaseCommand):
                     "is_active": True,
                 },
             )
+            if settings.DEV_STAFF_PASSWORD:
+                driver.set_password(settings.DEV_STAFF_PASSWORD)
+                driver.save(update_fields=("password",))
             DriverProfile.objects.get_or_create(
                 company=company, user=driver, defaults={"license_number": ""}
             )
@@ -89,9 +93,15 @@ class Command(BaseCommand):
                 "is_active": True,
             },
         )
+        dispatcher = User.objects.get(phone="+998900009901")
+        if settings.DEV_STAFF_PASSWORD:
+            dispatcher.set_password(settings.DEV_STAFF_PASSWORD)
+            dispatcher.save(update_fields=("password",))
         self.stdout.write(
             self.style.SUCCESS(
                 "Seed tayyor: 1 kompaniya, 10 mahsulot, 20 do‘kon, "
-                "2 mashina, 2 haydovchi va 1 dispetcher."
+                "2 mashina, 2 haydovchi va 1 dispetcher. "
+                "Xodimlar: dispetcher +998900009901; haydovchilar "
+                "+998900030001 va +998900030002."
             )
         )

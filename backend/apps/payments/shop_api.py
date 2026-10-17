@@ -9,7 +9,7 @@ from drf_spectacular.utils import extend_schema
 
 from apps.companies.models import CompanyShopLink, Shop
 from apps.core.permissions import ShopOwnerPermission
-from apps.payments.models import Payment, ShopBalance
+from apps.payments.models import BalanceEntry, Payment, ShopBalance
 
 
 class ShopCompanyBalanceSerializer(serializers.Serializer):
@@ -30,10 +30,22 @@ class ShopPaymentHistorySerializer(serializers.Serializer):
     reference = serializers.CharField()
 
 
+class ShopBalanceEntrySerializer(serializers.ModelSerializer):
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = BalanceEntry
+        fields = (
+            "id", "company_id", "amount", "direction", "order_id",
+            "payment_id", "note", "posted_at", "created_at",
+        )
+
+
 class ShopFinanceSerializer(serializers.Serializer):
     balance = serializers.DecimalField(max_digits=14, decimal_places=2)
     balances = ShopCompanyBalanceSerializer(many=True)
     payments = ShopPaymentHistorySerializer(many=True)
+    entries = ShopBalanceEntrySerializer(many=True)
 
 
 class ShopFinanceView(APIView):
@@ -62,6 +74,9 @@ class ShopFinanceView(APIView):
         payments = Payment.objects.filter(
             shop=shop, company_id__in=[link.company_id for link in links]
         ).select_related("company")[:50]
+        entries = BalanceEntry.objects.filter(
+            shop=shop, company_id__in=[link.company_id for link in links]
+        )[:50]
         return Response({
             "balance": str(total),
             "balances": balances,
@@ -79,4 +94,5 @@ class ShopFinanceView(APIView):
                 }
                 for payment in payments
             ],
+            "entries": ShopBalanceEntrySerializer(entries, many=True).data,
         })

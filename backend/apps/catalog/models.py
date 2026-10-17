@@ -17,6 +17,14 @@ class Product(CompanyOwnedModel):
     price = models.DecimalField(
         max_digits=12, decimal_places=2, validators=(MinValueValidator(0),)
     )
+    unit_weight = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+        validators=(MinValueValidator(0),),
+    )
+    unit_volume = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+        validators=(MinValueValidator(0),),
+    )
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False)
 

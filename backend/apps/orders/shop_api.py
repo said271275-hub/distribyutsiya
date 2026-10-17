@@ -88,7 +88,7 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderStatusHistory
-        fields = ("status", "actor_phone", "note", "created_at")
+        fields = ("from_status", "status", "actor_phone", "note", "created_at")
 
 
 class ShopOrderSerializer(serializers.ModelSerializer):

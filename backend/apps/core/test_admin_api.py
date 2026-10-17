@@ -1,0 +1,457 @@
+from datetime import date, timedelta
+from decimal import Decimal
+
+from django.test import TestCase
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from apps.accounts.models import User
+from apps.audit.models import AuditLog
+from apps.catalog.models import Product
+from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
+from apps.logistics.models import DriverProfile, Trip, TripStop, Vehicle
+from apps.orders.models import Order, OrderItem, OrderStatusHistory
+from apps.payments.models import BalanceEntry, Payment, ShopBalance
+
+
+class AdminApiTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.company = Company.objects.create(name="Kompaniya A")
+        cls.other_company = Company.objects.create(name="Kompaniya B")
+        cls.admin = User.objects.create_user(
+            phone="+998900004001",
+            password="test-admin-password",
+            role=User.Role.COMPANY_ADMIN,
+            company=cls.company,
+        )
+        cls.other_admin = User.objects.create_user(
+            phone="+998900004002",
+            password="test-admin-password",
+            role=User.Role.COMPANY_ADMIN,
+            company=cls.other_company,
+        )
+        cls.owner = User.objects.create_user(
+            phone="+998900004003", password="test-shop-password", role=User.Role.SHOP_OWNER
+        )
+        cls.shop = Shop.objects.create(
+            owner=cls.owner,
+            name="A do‘kon",
+            phone_primary="+998900004004",
+            address="Guliston",
+            district="Guliston",
+            latitude=Decimal("40.840000"),
+            longitude=Decimal("68.660000"),
+        )
+        CompanyShopLink.objects.create(company=cls.company, shop=cls.shop)
+        ShopBalance.objects.create(
+            company=cls.company, shop=cls.shop, credit_limit=Decimal("5000.00")
+        )
+        cls.product = Product.objects.create(
+            company=cls.company,
+            name="Suv",
+            unit=Product.Unit.BOX,
+            price=Decimal("1000.00"),
+            unit_weight=Decimal("10.000"),
+            unit_volume=Decimal("5.000"),
+        )
+        cls.other_owner = User.objects.create_user(
+            phone="+998900004005", role=User.Role.SHOP_OWNER
+        )
+        cls.other_shop = Shop.objects.create(
+            owner=cls.other_owner,
+            name="B do‘kon",
+            phone_primary="+998900004006",
+            address="Yangiyer",
+            district="Yangiyer",
+            latitude=Decimal("40.850000"),
+            longitude=Decimal("68.670000"),
+        )
+        CompanyShopLink.objects.create(company=cls.other_company, shop=cls.other_shop)
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(self.admin)
+
+    def make_order(self, company=None, shop=None, quantity="2.00", status=Order.Status.NEW):
+        company = company or self.company
+        shop = shop or self.shop
+        order = Order.objects.create(
+            company=company,
+            shop=shop,
+            status=status,
+            delivery_date=date.today() + timedelta(days=1),
+        )
+        product = self.product
+        OrderItem.objects.create(
+            company=company,
+            order=order,
+            product=product,
+            quantity=Decimal(quantity),
+            unit_price=Decimal("1000.00"),
+        )
+        order.recalculate_total()
+        return order
+
+    def test_order_list_filters_and_is_scoped_to_admin_company(self):
+        own_order = self.make_order()
+        self.make_order(company=self.other_company, shop=self.other_shop)
+
+        response = self.client.get(
+            "/api/v1/admin/orders/",
+            {"date": own_order.delivery_date.isoformat(), "district": "Guliston", "search": "A do‘kon"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["id"] for row in response.data["results"]], [own_order.pk])
+        invalid = self.client.get("/api/v1/admin/orders/", {"date": "not-a-date"})
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_order_transition_posts_ledger_history_and_audit(self):
+        order = self.make_order()
+
+        response = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.CONFIRMED, "reason": "Buyurtma tekshirildi"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        balance = ShopBalance.objects.get(company=self.company, shop=self.shop)
+        self.assertEqual(balance.current_balance, Decimal("2000.00"))
+        entry = BalanceEntry.objects.get(order=order)
+        self.assertEqual(entry.direction, BalanceEntry.Direction.DEBIT)
+        self.assertEqual(entry.posted_at is not None, True)
+        history = OrderStatusHistory.objects.get(order=order)
+        self.assertEqual(history.from_status, Order.Status.NEW)
+        self.assertEqual(history.status, Order.Status.CONFIRMED)
+        self.assertTrue(AuditLog.objects.filter(
+            actor=self.admin, entity_type="Order", entity_id=str(order.pk)
+        ).exists())
+
+    def test_invalid_order_transition_is_rejected(self):
+        order = self.make_order()
+        response = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.LOADED, "reason": "Noto‘g‘ri sakrash"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Order.objects.get(pk=order.pk).status, Order.Status.NEW)
+
+    def test_credit_limit_requires_dispatcher_confirmation(self):
+        order = self.make_order(quantity="6.00")
+        response = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.CONFIRMED, "reason": "Tasdiq"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("warning", response.data)
+        response = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {
+                "status": Order.Status.CONFIRMED,
+                "reason": "Limitdan oshishiga ruxsat",
+                "allow_credit_limit_exceeded": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_confirmed_order_cancellation_reverses_balance(self):
+        order = self.make_order()
+        self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.CONFIRMED, "reason": "Tasdiq"},
+            format="json",
+        )
+        response = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.CANCELLED, "reason": "Do‘kon so‘rovi"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("0.00"),
+        )
+        self.assertEqual(BalanceEntry.objects.filter(order=order).count(), 2)
+
+    def test_bulk_confirm_and_picking_totals(self):
+        delivery_date = date.today() + timedelta(days=1)
+        first = self.make_order(quantity="2.00", status=Order.Status.CONFIRMED)
+        second = self.make_order(quantity="3.00", status=Order.Status.CONFIRMED)
+        first.delivery_date = delivery_date
+        first.save(update_fields=("delivery_date", "updated_at"))
+        second.delivery_date = delivery_date
+        second.save(update_fields=("delivery_date", "updated_at"))
+        pending = self.make_order(quantity="100.00")
+        pending.delivery_date = delivery_date + timedelta(days=1)
+        pending.save(update_fields=("delivery_date", "updated_at"))
+        ShopBalance.objects.filter(company=self.company, shop=self.shop).update(
+            credit_limit=Decimal("200000.00")
+        )
+        bulk = self.client.post(
+            "/api/v1/admin/orders/bulk-confirm/",
+            {"order_ids": [pending.pk], "reason": "Ommaviy tasdiq"},
+            format="json",
+        )
+        self.assertEqual(bulk.status_code, 200, bulk.data)
+        self.assertEqual(Order.objects.get(pk=pending.pk).status, Order.Status.CONFIRMED)
+
+        response = self.client.get(
+            "/api/v1/admin/orders/picking-list/", {"date": delivery_date.isoformat()}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["items"][0]["quantity"], "5.00")
+        self.assertEqual(response.data["items"][0]["total_weight"], "50.000")
+        self.assertEqual(response.data["items"][0]["total_volume"], "25.000")
+
+    def test_product_and_shop_crud_are_company_scoped(self):
+        Product.objects.create(
+            company=self.other_company,
+            name="B mahsulot",
+            unit=Product.Unit.PIECE,
+            price=Decimal("10.00"),
+        )
+        response = self.client.get("/api/v1/admin/products/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["id"] for row in response.data["results"]], [self.product.pk])
+        created = self.client.post(
+            "/api/v1/admin/products/",
+            {"name": "Yangi", "unit": Product.Unit.PIECE, "price": "25.00"},
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(Product.objects.get(pk=created.data["id"]).company, self.company)
+
+    def test_company_admin_cannot_access_other_company_resources(self):
+        other_product = Product.objects.create(
+            company=self.other_company,
+            name="B mahsulot",
+            unit=Product.Unit.PIECE,
+            price=Decimal("10.00"),
+        )
+        self.assertEqual(
+            self.client.get(f"/api/v1/admin/products/{other_product.pk}/").status_code,
+            404,
+        )
+        other_order = self.make_order(company=self.other_company, shop=self.other_shop)
+        self.assertEqual(
+            self.client.get(f"/api/v1/admin/orders/{other_order.pk}/").status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(
+                f"/api/v1/admin/orders/{other_order.pk}/status/",
+                {"status": Order.Status.CONFIRMED, "reason": "Ruxsatsiz"},
+                format="json",
+            ).status_code,
+            404,
+        )
+
+    def test_shop_price_vehicle_driver_and_shop_archive_apis(self):
+        price = self.client.post(
+            "/api/v1/admin/shop-prices/",
+            {
+                "shop": self.shop.pk,
+                "product": self.product.pk,
+                "price": "900.00",
+                "discount_percent": "5.00",
+            },
+            format="json",
+        )
+        self.assertEqual(price.status_code, 201, price.data)
+        self.assertEqual(ShopPrice.objects.get(pk=price.data["id"]).company, self.company)
+
+        vehicle = self.client.post(
+            "/api/v1/admin/vehicles/",
+            {"name": "Yuk mashinasi", "plate_number": "01A200AA", "capacity": "1200.00"},
+            format="json",
+        )
+        self.assertEqual(vehicle.status_code, 201, vehicle.data)
+        self.assertEqual(Vehicle.objects.get(pk=vehicle.data["id"]).company, self.company)
+
+        driver_user = User.objects.create_user(
+            phone="+998900004030", company=self.company, role=User.Role.DRIVER
+        )
+        driver = DriverProfile.objects.create(company=self.company, user=driver_user)
+        updated_driver = self.client.patch(
+            f"/api/v1/admin/drivers/{driver.pk}/",
+            {"license_number": "ABC-123"},
+            format="json",
+        )
+        self.assertEqual(updated_driver.status_code, 200)
+        self.assertEqual(updated_driver.data["license_number"], "ABC-123")
+
+        deactivated_driver = self.client.delete(f"/api/v1/admin/drivers/{driver.pk}/")
+        self.assertEqual(deactivated_driver.status_code, 204)
+        driver_user.refresh_from_db()
+        self.assertFalse(driver_user.is_active)
+        reactivated_driver = self.client.post(
+            f"/api/v1/admin/drivers/{driver.pk}/activate/", {}, format="json"
+        )
+        self.assertEqual(reactivated_driver.status_code, 200)
+        driver_user.refresh_from_db()
+        self.assertTrue(driver_user.is_active)
+
+        self.assertTrue(CompanyShopLink.objects.filter(
+            company=self.company, shop=self.shop, is_active=True
+        ).exists())
+        shop_list = self.client.get("/api/v1/admin/shops/")
+        self.assertEqual(shop_list.status_code, 200)
+        self.assertEqual(
+            [row["id"] for row in shop_list.data["results"]],
+            [self.shop.pk],
+            f"company={self.admin.company_id}, link={CompanyShopLink.objects.get(shop=self.shop).company_id}, data={shop_list.data}",
+        )
+        updated_shop = self.client.patch(
+            f"/api/v1/admin/shops/{self.shop.pk}/",
+            {"credit_limit": "7500.00"},
+            format="json",
+        )
+        self.assertEqual(updated_shop.status_code, 200, updated_shop.data)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).credit_limit,
+            Decimal("7500.00"),
+        )
+
+        new_owner = User.objects.create_user(
+            phone="+998900004031", role=User.Role.SHOP_OWNER
+        )
+        created_shop = self.client.post(
+            "/api/v1/admin/shops/",
+            {
+                "owner_id": new_owner.pk,
+                "name": "Yangi do‘kon",
+                "phone_primary": "+998900004032",
+                "address": "Markaz",
+                "district": "Guliston",
+                "latitude": "40.840000",
+                "longitude": "68.660000",
+                "credit_limit": "10000.00",
+            },
+            format="json",
+        )
+        self.assertEqual(created_shop.status_code, 201, created_shop.data)
+        created_shop_row = Shop.objects.get(pk=created_shop.data["id"])
+        self.assertTrue(CompanyShopLink.objects.filter(
+            company=self.company, shop=created_shop_row, is_active=True
+        ).exists())
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=created_shop_row).credit_limit,
+            Decimal("10000.00"),
+        )
+
+        archived = self.client.post(
+            f"/api/v1/admin/shops/{self.shop.pk}/archive/", {}, format="json"
+        )
+        self.assertEqual(archived.status_code, 200)
+        self.assertFalse(CompanyShopLink.objects.get(shop=self.shop, company=self.company).is_active)
+
+    def test_staff_creation_cannot_assign_super_admin_or_other_company(self):
+        response = self.client.post(
+            "/api/v1/admin/staff/",
+            {
+                "phone": "+998900004010",
+                "role": User.Role.DRIVER,
+                "password": "temporary-password",
+                "company_id": self.other_company.pk,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        driver = User.objects.get(phone="+998900004010")
+        self.assertEqual(driver.company, self.company)
+        self.assertTrue(DriverProfile.objects.filter(user=driver, company=self.company).exists())
+        deactivated = self.client.post(
+            f"/api/v1/admin/staff/{driver.pk}/deactivate/", {}, format="json"
+        )
+        self.assertEqual(deactivated.status_code, 200)
+        driver.refresh_from_db()
+        self.assertFalse(driver.is_active)
+        self.assertTrue(driver.is_blocked)
+
+        denied = self.client.post(
+            "/api/v1/admin/staff/",
+            {
+                "phone": "+998900004011",
+                "role": User.Role.SUPER_ADMIN,
+                "password": "temporary-password",
+            },
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 400)
+
+    def test_shop_owner_cannot_create_payment_and_staff_payment_updates_ledger(self):
+        self.client.force_authenticate(self.owner)
+        denied = self.client.post(
+            "/api/v1/admin/payments/",
+            {"shop_id": self.shop.pk, "amount": "500.00", "method": Payment.Method.CASH},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            "/api/v1/admin/payments/",
+            {"shop_id": self.shop.pk, "amount": "500.00", "method": Payment.Method.CASH},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("-500.00"),
+        )
+        self.assertEqual(BalanceEntry.objects.filter(payment_id=response.data["id"]).count(), 1)
+        balances = self.client.get("/api/v1/admin/balances/")
+        self.assertEqual(balances.status_code, 200)
+        self.assertEqual(balances.data["results"][0]["current_balance"], "-500.00")
+        self.assertEqual(len(balances.data["results"][0]["entries"]), 1)
+
+        self.client.force_authenticate(self.owner)
+        finance = self.client.get("/api/v1/shop/finance/")
+        self.assertEqual(finance.status_code, 200)
+        self.assertEqual(len(finance.data["entries"]), 1)
+
+    def test_driver_can_only_record_payment_for_shop_on_own_trip(self):
+        driver_user = User.objects.create_user(
+            phone="+998900004020",
+            password="driver-password",
+            company=self.company,
+            role=User.Role.DRIVER,
+        )
+        driver = DriverProfile.objects.create(company=self.company, user=driver_user)
+        vehicle = Vehicle.objects.create(
+            company=self.company, name="V1", plate_number="01A100AA", capacity=100
+        )
+        trip = Trip.objects.create(
+            company=self.company, date=timezone.localdate(), vehicle=vehicle, driver=driver
+        )
+        TripStop.objects.create(company=self.company, trip=trip, shop=self.shop, sequence=1)
+        self.client.force_authenticate(driver_user)
+
+        response = self.client.post(
+            "/api/v1/admin/payments/",
+            {
+                "shop_id": self.shop.pk,
+                "amount": "100.00",
+                "method": Payment.Method.CASH,
+                "trip_id": trip.pk,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        forbidden = self.client.post(
+            "/api/v1/admin/payments/",
+            {
+                "shop_id": self.other_shop.pk,
+                "amount": "100.00",
+                "method": Payment.Method.CASH,
+                "trip_id": trip.pk,
+            },
+            format="json",
+        )
+        self.assertEqual(forbidden.status_code, 404)

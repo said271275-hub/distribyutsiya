@@ -62,6 +62,7 @@ class OrderStatusHistory(models.Model):
     order = models.ForeignKey(
         Order, on_delete=models.CASCADE, related_name="status_history"
     )
+    from_status = models.CharField(max_length=12, choices=Order.Status.choices, null=True, blank=True)
     status = models.CharField(max_length=12, choices=Order.Status.choices)
     actor = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True

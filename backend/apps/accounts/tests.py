@@ -328,6 +328,25 @@ class AuthFlowTests(TestCase):
         self.assertIn("ImproperlyConfigured", result.stderr)
         self.assertIn("DEV_OTP_ENABLED", result.stderr)
 
+    def test_dev_staff_password_is_rejected_without_local_otp_flags(self):
+        environment = os.environ.copy()
+        environment.update(
+            DJANGO_SECRET_KEY="test-only-secret-key-long-enough-for-hmac",
+            DJANGO_DEBUG="False",
+            DEV_OTP_ENABLED="False",
+            DEV_STAFF_PASSWORD="temporary-test-password",
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", "import config.settings"],
+            cwd=Path(__file__).resolve().parents[2],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DEV_STAFF_PASSWORD", result.stderr)
+
     def test_five_failed_logins_create_a_temporary_block(self):
         for index in range(5):
             response = self.client.post(

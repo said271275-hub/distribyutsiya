@@ -1,7 +1,8 @@
 from io import StringIO
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.catalog.models import Product
@@ -27,3 +28,20 @@ class DemoSeedCommandTests(TestCase):
         self.assertEqual(
             User.objects.filter(company=company, role=User.Role.COMPANY_ADMIN).count(), 1
         )
+
+    @override_settings(
+        DEBUG=True,
+        DEV_OTP_ENABLED=True,
+        DEV_STAFF_PASSWORD="Demo-staff-password-123!",
+    )
+    def test_seed_staff_can_login_with_configured_local_password(self):
+        call_command("seed_demo", stdout=StringIO())
+
+        user = User.objects.get(phone="+998900009901")
+        self.assertTrue(user.check_password("Demo-staff-password-123!"))
+        response = APIClient().post(
+            "/api/auth/staff/login/",
+            {"phone": user.phone, "password": "Demo-staff-password-123!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
