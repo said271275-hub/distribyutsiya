@@ -16,4 +16,11 @@ describe('role route access', () => {
     expect(canAccessRoles('shop_owner', ['company_admin', 'driver'])).toBe(false)
     expect(canAccessRoles('company_admin', ['shop_owner'])).toBe(false)
   })
+
+  it('allows only company administrators into the dispatcher panel', () => {
+    expect(canAccessRoles('company_admin', ['company_admin'])).toBe(true)
+    expect(canAccessRoles('shop_owner', ['company_admin'])).toBe(false)
+    expect(canAccessRoles('driver', ['company_admin'])).toBe(false)
+    expect(canAccessRoles('super_admin', ['company_admin'])).toBe(false)
+  })
 })

@@ -10,6 +10,7 @@ import { canAccessRoles, roleHomes } from './roleAccess'
 import './App.css'
 
 const ShopPanel = lazy(() => import('./ShopPanel'))
+const DispatcherPanel = lazy(() => import('./DispatcherPanel'))
 
 const phoneSchema = z
   .string()
@@ -660,7 +661,7 @@ function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute roles={['super_admin']}><RoleLandingPage /></ProtectedRoute>} />
-      <Route path="/company" element={<ProtectedRoute roles={['company_admin']}><RoleLandingPage /></ProtectedRoute>} />
+      <Route path="/company/*" element={<ProtectedRoute roles={['company_admin']}><Suspense fallback={<main className="full-loader">Yuklanmoqda…</main>}><DispatcherPanel /></Suspense></ProtectedRoute>} />
       <Route path="/driver" element={<ProtectedRoute roles={['driver']}><RoleLandingPage /></ProtectedRoute>} />
       <Route path="/shop/*" element={<ProtectedRoute roles={['shop_owner']}><Suspense fallback={<main className="full-loader">Yuklanmoqda…</main>}><ShopPanel /></Suspense></ProtectedRoute>} />
       <Route path="*" element={<IndexRedirect />} />

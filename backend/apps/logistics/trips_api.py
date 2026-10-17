@@ -440,12 +440,7 @@ def build_trip_suggestions(*, company, delivery_date, vehicle_ids=None):
     occupied_trips = Trip.objects.filter(
     company=company,
     date=delivery_date,
-    status__in=(
-        Trip.Status.PLANNED,
-        Trip.Status.CONFIRMED,
-        Trip.Status.IN_PROGRESS,
-    ),
-    )
+    ).exclude(status=Trip.Status.CANCELLED)
     vehicles = list(
     vehicles_query.exclude(
         pk__in=occupied_trips.values("vehicle_id")
