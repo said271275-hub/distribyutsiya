@@ -93,6 +93,7 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
 
 class ShopOrderSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source="company.name", read_only=True)
+    shop_name = serializers.CharField(source="shop.name", read_only=True)
     items = OrderLineSerializer(many=True, read_only=True)
     status_history = OrderStatusHistorySerializer(many=True, read_only=True)
     eta = serializers.SerializerMethodField()
@@ -103,7 +104,7 @@ class ShopOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = (
-            "id", "company_id", "company_name", "shop_id", "status", "delivery_date",
+            "id", "company_id", "company_name", "shop_id", "shop_name", "status", "delivery_date",
             "delivery_time_from", "delivery_time_to", "total_price", "note", "items",
             "status_history", "eta", "eta_window_from", "eta_window_to",
             "driver_phone", "created_at", "updated_at",

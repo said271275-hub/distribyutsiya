@@ -104,6 +104,7 @@ class AdminApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["id"] for row in response.data["results"]], [own_order.pk])
+        self.assertEqual(response.data["results"][0]["shop_name"], self.shop.name)
         invalid = self.client.get("/api/v1/admin/orders/", {"date": "not-a-date"})
         self.assertEqual(invalid.status_code, 400)
 

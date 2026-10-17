@@ -14,10 +14,13 @@ import {
   Sun,
   Truck,
   X,
+  Route as RouteIcon,
+  Boxes,
 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { lazy, Suspense } from 'react'
 import api, { apiErrorMessage } from './api'
 import { useAuth } from './useAuth'
 import {
@@ -29,6 +32,10 @@ import {
   type OrderStatus,
 } from './dispatcherUtils'
 import './DispatcherPanel.css'
+import './DispatcherPlanning.css'
+
+const TripPlanningPage = lazy(() => import('./TripPlanningPage'))
+const PickingListPage = lazy(() => import('./PickingListPage'))
 
 type DashboardData = {
   date: string
@@ -50,6 +57,7 @@ type AdminOrder = {
   delivery_time_to: string | null
   total_price: string
   created_at: string
+  shop_name: string
 }
 
 type Page<T> = {
@@ -120,7 +128,13 @@ function DispatcherPanel() {
     }
   }
 
-  const onOrdersPage = location.pathname.startsWith('/company/orders')
+  const pageTitle = location.pathname.startsWith('/company/orders')
+    ? 'Buyurtmalar'
+    : location.pathname.startsWith('/company/trips')
+      ? 'Reys tuzish'
+      : location.pathname.startsWith('/company/picking-list')
+        ? 'Yuklash ro‘yxati'
+        : 'Umumiy ko‘rinish'
 
   return (
     <div className="dispatcher-shell">
@@ -137,6 +151,12 @@ function DispatcherPanel() {
           <NavLink to="/company/orders" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <ClipboardList size={18} strokeWidth={1.8} /><span>Buyurtmalar</span>
           </NavLink>
+          <NavLink to="/company/trips" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <RouteIcon size={18} strokeWidth={1.8} /><span>Reyslar va marshrut</span>
+          </NavLink>
+          <NavLink to="/company/picking-list" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <Boxes size={18} strokeWidth={1.8} /><span>Yuklash ro‘yxati</span>
+          </NavLink>
         </nav>
         <div className="dispatcher-sidebar-bottom">
           <div className="dispatcher-account">
@@ -151,7 +171,7 @@ function DispatcherPanel() {
       </aside>
       <main className="dispatcher-main">
         <header className="dispatcher-topbar">
-          <div className="dispatcher-breadcrumb">Tarqatuv <span>/</span> {onOrdersPage ? 'Buyurtmalar' : 'Umumiy ko‘rinish'}</div>
+          <div className="dispatcher-breadcrumb">Tarqatuv <span>/</span> {pageTitle}</div>
           <div className="dispatcher-top-actions">
             <span className="dispatcher-today"><CalendarDays size={15} /> {formatOrderDate(localDate())}</span>
             <DispatcherThemeToggle />
@@ -161,6 +181,8 @@ function DispatcherPanel() {
           <Routes>
             <Route index element={<DashboardPage />} />
             <Route path="orders" element={<OrdersPage />} />
+            <Route path="trips" element={<Suspense fallback={<LoadingState />}><TripPlanningPage /></Suspense>} />
+            <Route path="picking-list" element={<Suspense fallback={<LoadingState />}><PickingListPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>
         </div>
@@ -170,6 +192,12 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/orders" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <ClipboardList size={19} /><small>Buyurtmalar</small>
+          </NavLink>
+          <NavLink to="/company/trips" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
+            <RouteIcon size={19} /><small>Reyslar</small>
+          </NavLink>
+          <NavLink to="/company/picking-list" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
+            <Boxes size={19} /><small>Yuklash</small>
           </NavLink>
         </nav>
       </main>
@@ -323,7 +351,7 @@ function OrdersPage() {
                   {orders.data.results.map((order) => (
                     <tr key={order.id}>
                       <td><strong>#{order.id}</strong><small>{order.company_name}</small></td>
-                      <td>Do‘kon #{order.shop_id}</td>
+                      <td>{order.shop_name}</td>
                       <td>{formatOrderDate(order.delivery_date)}{order.delivery_time_from && order.delivery_time_to ? <small>{order.delivery_time_from}–{order.delivery_time_to}</small> : null}</td>
                       <td><span className={`dispatcher-status dispatcher-status-${order.status}`}>{orderStatusLabels[order.status]}</span></td>
                       <td className="dispatcher-order-total">{formatCurrency(order.total_price)}</td>
