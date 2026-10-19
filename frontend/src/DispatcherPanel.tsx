@@ -19,6 +19,7 @@ import {
   Route as RouteIcon,
   Boxes,
   Tags,
+  MapPin,
 } from 'lucide-react'
 import { Fragment } from 'react'
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -46,6 +47,7 @@ import './DispatcherOrders.css'
 const TripPlanningPage = lazy(() => import('./TripPlanningPage'))
 const PickingListPage = lazy(() => import('./PickingListPage'))
 const DispatcherCatalogPage = lazy(() => import('./DispatcherCatalogPage'))
+const DispatcherShopsPage = lazy(() => import('./DispatcherShopsPage'))
 
 type DashboardData = {
   date: string
@@ -165,6 +167,8 @@ function DispatcherPanel() {
         ? 'Yuklash ro‘yxati'
         : location.pathname.startsWith('/company/catalog')
           ? 'Mahsulotlar va narxlar'
+          : location.pathname.startsWith('/company/shops')
+            ? 'Do‘konlar'
           : 'Umumiy ko‘rinish'
 
   return (
@@ -190,6 +194,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/catalog" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <Tags size={18} strokeWidth={1.8} /><span>Mahsulotlar va narxlar</span>
+          </NavLink>
+          <NavLink to="/company/shops" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <MapPin size={18} strokeWidth={1.8} /><span>Do‘konlar</span>
           </NavLink>
         </nav>
         <div className="dispatcher-sidebar-bottom">
@@ -218,6 +225,7 @@ function DispatcherPanel() {
             <Route path="trips" element={<Suspense fallback={<LoadingState />}><TripPlanningPage /></Suspense>} />
             <Route path="picking-list" element={<Suspense fallback={<LoadingState />}><PickingListPage /></Suspense>} />
             <Route path="catalog" element={<Suspense fallback={<LoadingState />}><DispatcherCatalogPage /></Suspense>} />
+            <Route path="shops" element={<Suspense fallback={<LoadingState />}><DispatcherShopsPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>
         </div>
@@ -236,6 +244,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/catalog" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <Tags size={19} /><small>Mahsulotlar</small>
+          </NavLink>
+          <NavLink to="/company/shops" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
+            <MapPin size={19} /><small>Do‘konlar</small>
           </NavLink>
         </nav>
       </main>
