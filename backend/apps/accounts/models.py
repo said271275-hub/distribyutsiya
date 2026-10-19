@@ -4,6 +4,7 @@ from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
 
@@ -75,26 +76,27 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
-        SUPER_ADMIN = "super_admin", "Super administrator"
-        COMPANY_ADMIN = "company_admin", "Kompaniya administratori"
-        DRIVER = "driver", "Haydovchi"
-        SHOP_OWNER = "shop_owner", "Do‘kon egasi"
+        SUPER_ADMIN = "super_admin", _("Bosh administrator")
+        COMPANY_ADMIN = "company_admin", _("Kompaniya administratori")
+        DRIVER = "driver", _("Haydovchi")
+        SHOP_OWNER = "shop_owner", _("Do‘kon egasi")
 
-    phone = models.CharField(max_length=20, unique=True)
+    phone = models.CharField(_("Telefon raqami"), max_length=20, unique=True)
     company = models.ForeignKey(
         "companies.Company",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="users",
+        verbose_name=_("Kompaniya"),
     )
-    role = models.CharField(max_length=20, choices=Role.choices)
-    is_active = models.BooleanField(default=True)
-    is_blocked = models.BooleanField(default=False)
-    is_deleted = models.BooleanField(default=False)
-    auth_version = models.PositiveIntegerField(default=0)
-    is_staff = models.BooleanField(default=False)
-    date_joined = models.DateTimeField(default=timezone.now)
+    role = models.CharField(_("Foydalanuvchi roli"), max_length=20, choices=Role.choices)
+    is_active = models.BooleanField(_("Faol"), default=True)
+    is_blocked = models.BooleanField(_("Bloklangan"), default=False)
+    is_deleted = models.BooleanField(_("O‘chirilgan"), default=False)
+    auth_version = models.PositiveIntegerField(_("Kirish kaliti versiyasi"), default=0)
+    is_staff = models.BooleanField(_("Admin sahifasiga kirish huquqi"), default=False)
+    date_joined = models.DateTimeField(_("Ro‘yxatdan o‘tgan vaqt"), default=timezone.now)
 
     objects = UserManager()
 
@@ -102,6 +104,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = []
 
     class Meta:
+        verbose_name = _("Foydalanuvchi")
+        verbose_name_plural = _("Foydalanuvchilar")
         ordering = ("phone",)
         constraints = [
             models.CheckConstraint(
@@ -143,15 +147,24 @@ class DeletionRequest(models.Model):
         CANCELLED = "cancelled", "Bekor qilindi"
         COMPLETED = "completed", "Bajarildi"
 
-    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="deletion_requests")
-    reason = models.CharField(max_length=20, choices=Reason.choices)
-    reason_other = models.TextField(blank=True)
-    requested_at = models.DateTimeField(default=timezone.now)
-    scheduled_for = models.DateTimeField(blank=True)
-    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
-    processed_at = models.DateTimeField(null=True, blank=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="deletion_requests",
+        verbose_name=_("Foydalanuvchi"),
+    )
+    reason = models.CharField(_("O‘chirish sababi"), max_length=20, choices=Reason.choices)
+    reason_other = models.TextField(_("Boshqa sabab izohi"), blank=True)
+    requested_at = models.DateTimeField(_("So‘rov yuborilgan vaqt"), default=timezone.now)
+    scheduled_for = models.DateTimeField(_("Rejalashtirilgan o‘chirish vaqti"), blank=True)
+    status = models.CharField(
+        _("So‘rov holati"), max_length=12, choices=Status.choices, default=Status.PENDING
+    )
+    processed_at = models.DateTimeField(_("Ko‘rib chiqilgan vaqt"), null=True, blank=True)
 
     class Meta:
+        verbose_name = _("Akkauntni o‘chirish so‘rovi")
+        verbose_name_plural = _("Akkauntni o‘chirish so‘rovlari")
         ordering = ("-requested_at",)
 
     def save(self, *args, **kwargs):
