@@ -269,11 +269,17 @@ class AdminApiTests(TestCase):
 
         vehicle = self.client.post(
             "/api/v1/admin/vehicles/",
-            {"name": "Yuk mashinasi", "plate_number": "01A200AA", "capacity": "1200.00"},
+            {
+                "name": "Yuk mashinasi",
+                "plate_number": "01A200AA",
+                "capacity": "1200.00",
+                "volume_capacity": "18.50",
+            },
             format="json",
         )
         self.assertEqual(vehicle.status_code, 201, vehicle.data)
         self.assertEqual(Vehicle.objects.get(pk=vehicle.data["id"]).company, self.company)
+        self.assertEqual(vehicle.data["volume_capacity"], "18.50")
 
         driver_user = User.objects.create_user(
             phone="+998900004030", company=self.company, role=User.Role.DRIVER
@@ -281,11 +287,40 @@ class AdminApiTests(TestCase):
         driver = DriverProfile.objects.create(company=self.company, user=driver_user)
         updated_driver = self.client.patch(
             f"/api/v1/admin/drivers/{driver.pk}/",
-            {"license_number": "ABC-123"},
+            {"license_number": "ABC-123", "vehicle_id": vehicle.data["id"]},
             format="json",
         )
         self.assertEqual(updated_driver.status_code, 200)
         self.assertEqual(updated_driver.data["license_number"], "ABC-123")
+        self.assertEqual(updated_driver.data["vehicle_id"], vehicle.data["id"])
+        self.assertEqual(updated_driver.data["vehicle_name"], "Yuk mashinasi")
+        self.assertTrue(AuditLog.objects.filter(
+            actor=self.admin,
+            entity_type="DriverProfile",
+            entity_id=str(driver.pk),
+            action="update",
+        ).exists())
+
+        other_vehicle = Vehicle.objects.create(
+            company=self.other_company,
+            name="B transporti",
+            plate_number="01B200AA",
+            capacity=Decimal("100.00"),
+        )
+        denied_assignment = self.client.patch(
+            f"/api/v1/admin/drivers/{driver.pk}/",
+            {"vehicle_id": other_vehicle.pk},
+            format="json",
+        )
+        self.assertEqual(denied_assignment.status_code, 400)
+        driver.refresh_from_db()
+        self.assertEqual(driver.vehicle_id, vehicle.data["id"])
+
+        archived_vehicle = self.client.delete(f"/api/v1/admin/vehicles/{vehicle.data['id']}/")
+        self.assertEqual(archived_vehicle.status_code, 204)
+        vehicle_row = Vehicle.objects.get(pk=vehicle.data["id"])
+        self.assertTrue(vehicle_row.is_archived)
+        self.assertFalse(vehicle_row.is_active)
 
         deactivated_driver = self.client.delete(f"/api/v1/admin/drivers/{driver.pk}/")
         self.assertEqual(deactivated_driver.status_code, 204)

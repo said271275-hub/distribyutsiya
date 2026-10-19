@@ -322,6 +322,21 @@ class TripApiTests(TestCase):
 
     def test_capacity_uses_one_metric_for_all_suggested_stops(self):
         delivery_date = date.today() + timedelta(days=1)
+        self.vehicle.volume_capacity = Decimal("1.00")
+        self.vehicle.save(update_fields=("volume_capacity", "updated_at"))
+        second_vehicle = Vehicle.objects.create(
+            company=self.company,
+            name="Hajm bo‘yicha ikkinchi yuk mashinasi",
+            plate_number="01A403AA",
+            capacity=Decimal("50.00"),
+            volume_capacity=Decimal("1.00"),
+        )
+        second_driver_user = User.objects.create_user(
+            phone="+998901110098",
+            company=self.company,
+            role=User.Role.DRIVER,
+        )
+        DriverProfile.objects.create(company=self.company, user=second_driver_user)
         no_weight_product = Product.objects.create(
             company=self.company,
             name="Og‘irligi ko‘rsatilmagan suv",
@@ -343,8 +358,11 @@ class TripApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.data)
         suggestions = response.data["trips"]
+        self.assertEqual(len(suggestions), 2)
         for suggestion in suggestions:
             self.assertEqual(suggestion["capacity_metric"], "volume")
+            self.assertEqual(suggestion["vehicle_capacity"], Decimal("1.00"))
+            self.assertTrue(suggestion["capacity_exceeded"])
             self.assertTrue(
                 all(stop["capacity_metric"] == "volume" for stop in suggestion["stops"])
             )
@@ -352,6 +370,72 @@ class TripApiTests(TestCase):
             sorted(order_id for trip in suggestions for order_id in trip["order_ids"]),
             sorted((first.pk, second.pk)),
         )
+
+    def test_suggestion_pairs_assigned_driver_with_its_vehicle(self):
+        delivery_date = date.today() + timedelta(days=1)
+        self.vehicle.capacity = Decimal("15.00")
+        self.vehicle.save(update_fields=("capacity", "updated_at"))
+        self.driver.vehicle = self.vehicle
+        self.driver.save(update_fields=("vehicle", "updated_at"))
+        second_vehicle = Vehicle.objects.create(
+            company=self.company,
+            name="Ikkinchi yuk mashinasi",
+            plate_number="01A402AA",
+            capacity=Decimal("15.00"),
+        )
+        unassigned_driver_user = User.objects.create_user(
+            phone="+998901110099",
+            company=self.company,
+            role=User.Role.DRIVER,
+        )
+        unassigned_driver = DriverProfile.objects.create(
+            company=self.company,
+            user=unassigned_driver_user,
+        )
+        self.make_order(shop=self.shop, delivery_date=delivery_date)
+        self.make_order(shop=self.nearby_shop, delivery_date=delivery_date)
+
+        response = self.client.post(
+            "/api/v1/admin/trips/suggest/",
+            {"date": delivery_date.isoformat()},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        trips = response.data["trips"]
+        self.assertEqual(len(trips), 2)
+        self.assertEqual(
+            {trip["vehicle_id"]: trip["driver_id"] for trip in trips},
+            {
+                self.vehicle.pk: self.driver.pk,
+                second_vehicle.pk: unassigned_driver.pk,
+            },
+        )
+
+    def test_volume_suggestion_warns_when_vehicle_volume_capacity_is_missing(self):
+        delivery_date = date.today() + timedelta(days=1)
+        product = Product.objects.create(
+            company=self.company,
+            name="Hajmi bor, og‘irligi yo‘q mahsulot",
+            unit=Product.Unit.BOX,
+            price=Decimal("1000.00"),
+            unit_volume=Decimal("2.000"),
+        )
+        order = self.make_order(delivery_date=delivery_date)
+        order.items.update(product=product)
+
+        response = self.client.post(
+            "/api/v1/admin/trips/suggest/",
+            {"date": delivery_date.isoformat()},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        suggestion = response.data["trips"][0]
+        self.assertEqual(suggestion["capacity_metric"], "volume")
+        self.assertIsNone(suggestion["vehicle_capacity"])
+        self.assertIn("sig‘im kiritilmagan", suggestion["warning"])
+        self.assertEqual(suggestion["order_ids"], [order.pk])
 
     def test_empty_day_returns_empty_suggestions(self):
         response = self.client.post(

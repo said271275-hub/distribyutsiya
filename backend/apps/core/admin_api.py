@@ -260,10 +260,20 @@ class VehicleAdminSerializer(serializers.ModelSerializer):
     capacity = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=Decimal("0.01")
     )
+    volume_capacity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Vehicle
-        fields = ("id", "name", "plate_number", "capacity", "is_active", "is_archived")
+        fields = (
+            "id", "name", "plate_number", "capacity", "volume_capacity",
+            "is_active", "is_archived",
+        )
         read_only_fields = ("id",)
 
 
@@ -403,11 +413,39 @@ class DriverAdminSerializer(serializers.ModelSerializer):
     phone = serializers.CharField(source="user.phone", read_only=True)
     is_active = serializers.BooleanField(source="user.is_active", read_only=True)
     blocked = serializers.BooleanField(source="user.is_blocked", read_only=True)
+    vehicle_id = serializers.PrimaryKeyRelatedField(
+        source="vehicle",
+        queryset=Vehicle.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    vehicle_name = serializers.CharField(source="vehicle.name", read_only=True, allow_null=True)
 
     class Meta:
         model = DriverProfile
-        fields = ("id", "user", "phone", "license_number", "is_active", "blocked")
+        fields = (
+            "id", "user", "phone", "license_number", "vehicle_id", "vehicle_name",
+            "is_active", "blocked",
+        )
         read_only_fields = ("id", "user", "phone", "is_active", "blocked")
+
+    def validate(self, attrs):
+        vehicle = attrs.get("vehicle")
+        if vehicle is not None:
+            company = self.context["company"]
+            if vehicle.company_id != company.pk:
+                raise serializers.ValidationError({
+                    "vehicle_id": "Boshqa kompaniyaning transportini tanlab bo‘lmaydi."
+                })
+            current_vehicle_id = self.instance.vehicle_id if self.instance else None
+            if (
+                (not vehicle.is_active or vehicle.is_archived)
+                and vehicle.pk != current_vehicle_id
+            ):
+                raise serializers.ValidationError({
+                    "vehicle_id": "Yangi biriktirish uchun faqat faol transportni tanlash mumkin."
+                })
+        return attrs
 
 
 class DriverAdminViewSet(
@@ -421,7 +459,14 @@ class DriverAdminViewSet(
     serializer_class = DriverAdminSerializer
 
     def get_queryset(self):
-        return DriverProfile.objects.filter(company=self.company).select_related("user")
+        return DriverProfile.objects.filter(company=self.company).select_related(
+            "user", "vehicle"
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["company"] = self.company
+        return context
 
     def perform_destroy(self, instance):
         before = {"is_active": instance.user.is_active, "is_blocked": instance.user.is_blocked}

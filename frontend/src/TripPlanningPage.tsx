@@ -33,6 +33,7 @@ type Vehicle = {
   id: number
   name: string
   capacity: string
+  volume_capacity: string | null
   is_active: boolean
   is_archived: boolean
 }
@@ -52,7 +53,7 @@ type TripProposal = {
   district: string
   vehicle_id: number
   driver_id: number
-  vehicle_capacity: string
+  vehicle_capacity: string | null
   capacity_metric: string
   estimated_load: string | null
   capacity_exceeded: boolean
@@ -145,10 +146,15 @@ export default function TripPlanningPage() {
   const selectedStops = proposalStops.filter((stop) => selectedShopIds.includes(stop.shop_id))
   const load = getSuggestionLoad(selectedStops)
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId)
+  const selectedCapacity = selectedVehicle && load.metric === 'volume'
+    ? selectedVehicle.volume_capacity
+    : selectedVehicle && load.metric === 'weight'
+      ? selectedVehicle.capacity
+      : null
   const loadExceedsCapacity = Boolean(
-    selectedVehicle &&
+    selectedCapacity !== null &&
     load.load !== null &&
-    load.load > Number(selectedVehicle.capacity),
+    load.load > Number(selectedCapacity),
   )
   const orderById = new Map((ordersQuery.data?.results ?? []).map((order) => [order.id, order]))
 
@@ -326,7 +332,7 @@ export default function TripPlanningPage() {
                 <label>
                   <span>Mashina</span>
                   <select value={selectedVehicleId ?? ''} onChange={(event) => setSelectedVehicleId(Number(event.target.value) || null)}>
-                    {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name} · sig‘im {vehicle.capacity}</option>)}
+                    {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name} · {vehicle.capacity} kg · {vehicle.volume_capacity ?? '—'} m³</option>)}
                   </select>
                 </label>
                 <label>
@@ -354,7 +360,7 @@ export default function TripPlanningPage() {
                 <Truck size={16} />
                 {load.load === null
                   ? 'Tanlangan yukning sig‘imi noma’lum'
-                  : `Jami yuk: ${load.load.toFixed(3)} ${load.metric === 'weight' ? 'kg' : 'm³'} / ${selectedVehicle?.capacity ?? selectedProposal.vehicle_capacity}`}
+                  : `Jami yuk: ${load.load.toFixed(3)} ${load.metric === 'weight' ? 'kg' : 'm³'} / ${selectedCapacity ?? selectedProposal.vehicle_capacity ?? 'sig‘im kiritilmagan'} ${load.metric === 'weight' ? 'kg' : 'm³'}`}
                 {(loadExceedsCapacity || (selectedStops.length === proposalStops.length && selectedProposal.capacity_exceeded)) && <strong><AlertTriangle size={14} /> Mashina sig‘imidan oshdi</strong>}
               </div>
               <Suspense fallback={<div className="dispatcher-loading">Xarita yuklanmoqda…</div>}>

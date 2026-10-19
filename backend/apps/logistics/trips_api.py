@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, F, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
@@ -314,6 +314,14 @@ def _shop_load(orders):
     }
 
 
+def _vehicle_capacity(vehicle, metric):
+    if metric == "weight":
+        return vehicle.capacity
+    if metric == "volume":
+        return vehicle.volume_capacity
+    return None
+
+
 def _cluster_shops(shops):
     remaining = list(shops)
     clusters = []
@@ -441,21 +449,36 @@ def build_trip_suggestions(*, company, delivery_date, vehicle_ids=None):
     company=company,
     date=delivery_date,
     ).exclude(status=Trip.Status.CANCELLED)
+    capacity_field = "volume_capacity" if capacity_metric == "volume" else "capacity"
     vehicles = list(
-    vehicles_query.exclude(
-        pk__in=occupied_trips.values("vehicle_id")
-    ).order_by("-capacity", "pk")
+        vehicles_query.exclude(
+            pk__in=occupied_trips.values("vehicle_id")
+        ).order_by(F(capacity_field).desc(nulls_last=True), "pk")
     )
     drivers = list(
-    DriverProfile.objects.filter(
-        company=company,
-        user__is_active=True,
-        user__is_blocked=False,
+        DriverProfile.objects.filter(
+            company=company,
+            user__is_active=True,
+            user__is_blocked=False,
+        )
+        .exclude(pk__in=occupied_trips.values("driver_id"))
+        .select_related("vehicle")
+        .order_by("pk")
     )
-    .exclude(pk__in=occupied_trips.values("driver_id"))
-    .order_by("pk")
-    )
-    vehicle_driver_pairs = list(zip(vehicles, drivers))
+    assigned_drivers = defaultdict(list)
+    unassigned_drivers = []
+    for driver in drivers:
+        if driver.vehicle_id:
+            assigned_drivers[driver.vehicle_id].append(driver)
+        else:
+            unassigned_drivers.append(driver)
+    vehicle_driver_pairs = []
+    for vehicle in vehicles:
+        available_drivers = assigned_drivers.get(vehicle.pk, [])
+        if available_drivers:
+            vehicle_driver_pairs.append((vehicle, available_drivers.pop(0)))
+        elif unassigned_drivers:
+            vehicle_driver_pairs.append((vehicle, unassigned_drivers.pop(0)))
     next_pair_index = 0
     unassigned_order_ids = set()
 
@@ -483,13 +506,19 @@ def build_trip_suggestions(*, company, delivery_date, vehicle_ids=None):
                 over_capacity = bool(
                     current_vehicle is not None
                     and current_metric in ("weight", "volume")
-                    and current_load > current_vehicle.capacity
+                    and _vehicle_capacity(current_vehicle, current_metric) is not None
+                    and current_load > _vehicle_capacity(current_vehicle, current_metric)
+                )
+                capacity_missing = (
+                    current_vehicle is not None
+                    and current_metric in ("weight", "volume")
+                    and _vehicle_capacity(current_vehicle, current_metric) is None
                 )
                 suggestions.append({
                     "district": current[0]["district"],
                     "vehicle_id": current_vehicle.pk,
                     "driver_id": current_driver.pk,
-                    "vehicle_capacity": current_vehicle.capacity,
+                    "vehicle_capacity": _vehicle_capacity(current_vehicle, current_metric),
                     "capacity_metric": current_metric or "unknown",
                     "estimated_load": current_load if current_metric else None,
                     "capacity_exceeded": over_capacity,
@@ -497,6 +526,8 @@ def build_trip_suggestions(*, company, delivery_date, vehicle_ids=None):
                     "warning": (
                         "Bitta do‘kon buyurtmasi transport sig‘imidan oshadi."
                         if over_capacity
+                        else "Transport uchun bu o‘lchovdagi sig‘im kiritilmagan; sig‘imni tekshiring."
+                        if capacity_missing
                         else "Sig‘im chegarasi sabab keyingi nuqtalar alohida reysga taklif qilindi."
                         if split_for_capacity
                         else None
@@ -527,7 +558,8 @@ def build_trip_suggestions(*, company, delivery_date, vehicle_ids=None):
                     and current_vehicle is not None
                     and metric == current_metric
                     and next_load is not None
-                    and current_load + next_load > current_vehicle.capacity
+                    and _vehicle_capacity(current_vehicle, metric) is not None
+                    and current_load + next_load > _vehicle_capacity(current_vehicle, metric)
                 ):
                     flush(split_for_capacity=True)
                     if next_pair_index >= len(vehicle_driver_pairs):

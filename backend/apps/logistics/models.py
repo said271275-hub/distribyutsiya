@@ -12,6 +12,13 @@ class Vehicle(CompanyOwnedModel):
     capacity = models.DecimalField(
         max_digits=12, decimal_places=2, validators=(MinValueValidator(0.01),)
     )
+    volume_capacity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=(MinValueValidator(0.01),),
+        null=True,
+        blank=True,
+    )
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False)
 
@@ -28,16 +35,26 @@ class DriverProfile(CompanyOwnedModel):
         "accounts.User", on_delete=models.PROTECT, related_name="driver_profile"
     )
     license_number = models.CharField(max_length=80, blank=True)
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.SET_NULL,
+        related_name="drivers",
+        null=True,
+        blank=True,
+    )
 
     def clean(self):
         super().clean()
+        errors = {}
         if self.user_id and (
             self.user.role != self.user.Role.DRIVER
             or self.user.company_id != self.company_id
         ):
-            raise ValidationError(
-                {"user": "Haydovchi foydalanuvchisi shu kompaniyada driver rolida bo‘lishi kerak."}
-            )
+            errors["user"] = "Haydovchi foydalanuvchisi shu kompaniyada driver rolida bo‘lishi kerak."
+        if self.vehicle_id and self.vehicle.company_id != self.company_id:
+            errors["vehicle"] = "Transport haydovchi bilan bir kompaniyada bo‘lishi kerak."
+        if errors:
+            raise ValidationError(errors)
 
 
 class Trip(CompanyOwnedModel):
