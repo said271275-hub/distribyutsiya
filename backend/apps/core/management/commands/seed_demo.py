@@ -25,15 +25,26 @@ class Command(BaseCommand):
         )
         units = (Product.Unit.PIECE, Product.Unit.BOX, Product.Unit.BLOCK)
         for index in range(1, 11):
-            Product.objects.get_or_create(
+            defaults = {
+                "unit": units[(index - 1) % len(units)],
+                "price": Decimal(15000 + index * 2500),
+                "unit_weight": Decimal("20.000"),
+                "unit_volume": Decimal("0.080"),
+                "is_active": True,
+            }
+            product, created = Product.objects.get_or_create(
                 company=company,
                 name=f"Demo mahsulot {index:02d}",
-                defaults={
-                    "unit": units[(index - 1) % len(units)],
-                    "price": Decimal(15000 + index * 2500),
-                    "is_active": True,
-                },
+                defaults=defaults,
             )
+            if not created:
+                updates = {}
+                if product.unit_weight is None:
+                    updates["unit_weight"] = defaults["unit_weight"]
+                if product.unit_volume is None:
+                    updates["unit_volume"] = defaults["unit_volume"]
+                if updates:
+                    Product.objects.filter(pk=product.pk).update(**updates)
 
         districts = (
             "Guliston", "Yangiyer", "Shirin", "Boyovut", "Sayxunobod",
