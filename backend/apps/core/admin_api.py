@@ -503,7 +503,13 @@ class StaffSerializer(serializers.ModelSerializer):
 
     def validate_phone(self, value):
         from apps.accounts.services import normalize_uz_phone
-        return normalize_uz_phone(value)
+        phone = normalize_uz_phone(value)
+        existing_users = User.objects.filter(phone=phone)
+        if self.instance:
+            existing_users = existing_users.exclude(pk=self.instance.pk)
+        if existing_users.exists():
+            raise serializers.ValidationError("Bu telefon raqami allaqachon ro‘yxatdan o‘tgan.")
+        return phone
 
     def validate_password(self, value):
         validate_password(value)
@@ -546,6 +552,41 @@ class StaffAdminViewSet(viewsets.ViewSet):
             })
         return Response(StaffSerializer(user).data, status=status.HTTP_201_CREATED)
 
+    def partial_update(self, request, pk=None):
+        user = get_object_or_404(
+            User.objects.filter(company=self.company, role=User.Role.COMPANY_ADMIN),
+            pk=pk,
+        )
+        if user.pk == request.user.pk:
+            raise ValidationError({"detail": "O‘z akkauntingizni xodimlar boshqaruvi orqali tahrirlay olmaysiz."})
+        serializer = StaffUpdateSerializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        before = {"phone": user.phone, "role": user.role}
+        user = serializer.save()
+        audit(request.user, self.company, "update", user, before, {
+            "phone": user.phone, "role": user.role,
+        })
+        return Response(StaffSerializer(user).data)
+
+    @action(detail=True, methods=("post",), url_path="reset-password")
+    def reset_password(self, request, pk=None):
+        user = get_object_or_404(
+            User.objects.filter(company=self.company, role=User.Role.COMPANY_ADMIN),
+            pk=pk,
+        )
+        if user.pk == request.user.pk:
+            raise ValidationError({"detail": "O‘z parolingizni xodimlar boshqaruvi orqali tiklay olmaysiz."})
+        serializer = StaffPasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        before = {"auth_version": user.auth_version}
+        user.set_password(serializer.validated_data["password"])
+        user.auth_version += 1
+        user.save(update_fields=("password", "auth_version"))
+        audit(request.user, self.company, "reset_password", user, before, {
+            "auth_version": user.auth_version,
+        })
+        return Response({"id": user.pk, "password_reset": True})
+
     @action(detail=True, methods=("post",), url_path="deactivate")
     def deactivate(self, request, pk=None):
         user = get_object_or_404(
@@ -554,6 +595,10 @@ class StaffAdminViewSet(viewsets.ViewSet):
             ),
             pk=pk,
         )
+        if user.pk == request.user.pk:
+            raise ValidationError({"detail": "O‘z akkauntingizni faolsizlantira olmaysiz."})
+        if not user.is_active and user.is_blocked:
+            return Response({"id": user.pk, "is_active": False, "is_blocked": True})
         user.is_active = False
         user.is_blocked = True
         user.auth_version += 1
@@ -571,6 +616,10 @@ class StaffAdminViewSet(viewsets.ViewSet):
             ),
             pk=pk,
         )
+        if user.pk == request.user.pk:
+            raise ValidationError({"detail": "O‘z akkauntingizni ushbu amal bilan faollashtira olmaysiz."})
+        if user.is_active and not user.is_blocked:
+            return Response({"id": user.pk, "is_active": True, "is_blocked": False})
         user.is_active = True
         user.is_blocked = False
         user.auth_version += 1
@@ -579,6 +628,34 @@ class StaffAdminViewSet(viewsets.ViewSet):
             "is_active": True, "is_blocked": False,
         })
         return Response({"id": user.pk, "is_active": user.is_active, "is_blocked": user.is_blocked})
+
+
+class StaffUpdateSerializer(serializers.ModelSerializer):
+    phone = serializers.CharField(max_length=20)
+
+    class Meta:
+        model = User
+        fields = ("phone",)
+
+    def validate_phone(self, value):
+        from apps.accounts.services import normalize_uz_phone
+        phone = normalize_uz_phone(value)
+        if User.objects.filter(phone=phone).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError("Bu telefon raqami allaqachon ro‘yxatdan o‘tgan.")
+        return phone
+
+
+class StaffPasswordResetSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+    password_confirm = serializers.CharField(write_only=True, min_length=8)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError({
+                "password_confirm": "Parollar bir-biriga mos kelmadi."
+            })
+        validate_password(attrs["password"])
+        return attrs
 
 
 class OrderStatusInputSerializer(serializers.Serializer):

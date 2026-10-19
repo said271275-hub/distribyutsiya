@@ -21,6 +21,7 @@ import {
   Tags,
   MapPin,
   UserRound,
+  UsersRound,
 } from 'lucide-react'
 import { Fragment } from 'react'
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -50,6 +51,7 @@ const PickingListPage = lazy(() => import('./PickingListPage'))
 const DispatcherCatalogPage = lazy(() => import('./DispatcherCatalogPage'))
 const DispatcherShopsPage = lazy(() => import('./DispatcherShopsPage'))
 const DispatcherFleetPage = lazy(() => import('./DispatcherFleetPage'))
+const DispatcherStaffPage = lazy(() => import('./DispatcherStaffPage'))
 
 type DashboardData = {
   date: string
@@ -173,6 +175,8 @@ function DispatcherPanel() {
             ? 'Do‘konlar'
             : location.pathname.startsWith('/company/fleet')
               ? 'Mashinalar va haydovchilar'
+              : location.pathname.startsWith('/company/staff')
+                ? 'Xodimlar'
           : 'Umumiy ko‘rinish'
 
   return (
@@ -205,6 +209,9 @@ function DispatcherPanel() {
           <NavLink to="/company/fleet" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <Truck size={18} strokeWidth={1.8} /><span>Mashinalar va haydovchilar</span>
           </NavLink>
+          <NavLink to="/company/staff" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <UsersRound size={18} strokeWidth={1.8} /><span>Xodimlar</span>
+          </NavLink>
         </nav>
         <div className="dispatcher-sidebar-bottom">
           <div className="dispatcher-account">
@@ -234,6 +241,7 @@ function DispatcherPanel() {
             <Route path="catalog" element={<Suspense fallback={<LoadingState />}><DispatcherCatalogPage /></Suspense>} />
             <Route path="shops" element={<Suspense fallback={<LoadingState />}><DispatcherShopsPage /></Suspense>} />
             <Route path="fleet" element={<Suspense fallback={<LoadingState />}><DispatcherFleetPage /></Suspense>} />
+            <Route path="staff" element={<Suspense fallback={<LoadingState />}><DispatcherStaffPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>
         </div>
@@ -258,6 +266,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/fleet" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <UserRound size={19} /><small>Transport</small>
+          </NavLink>
+          <NavLink to="/company/staff" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
+            <UsersRound size={19} /><small>Xodimlar</small>
           </NavLink>
         </nav>
       </main>

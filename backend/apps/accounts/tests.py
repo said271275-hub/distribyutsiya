@@ -11,7 +11,7 @@ from unittest.mock import patch
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from rest_framework import generics, serializers
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -43,6 +43,34 @@ from apps.payments.models import ShopBalance
 
 PASSWORD = "Sirdaryo!StrongPassword938"
 DEV_TEST_OTP_CODE = f"{secrets.randbelow(1_000_000):06d}"
+
+
+class AdminUzbekLabelsTests(SimpleTestCase):
+    def test_registered_model_and_field_labels_are_uzbek(self):
+        self.assertEqual(str(User._meta.verbose_name), "Foydalanuvchi")
+        self.assertEqual(str(User._meta.verbose_name_plural), "Foydalanuvchilar")
+        self.assertEqual(str(User._meta.get_field("phone").verbose_name), "Telefon raqami")
+        self.assertEqual(str(User._meta.get_field("company").verbose_name), "Kompaniya")
+        self.assertEqual(str(User._meta.get_field("is_active").verbose_name), "Faol")
+        self.assertEqual(str(DeletionRequest._meta.verbose_name_plural), "Akkauntni o‘chirish so‘rovlari")
+        self.assertEqual(str(AuditLog._meta.verbose_name_plural), "Harakatlar jurnali")
+
+    def test_admin_branding_and_user_field_groups_are_uzbek(self):
+        from django.contrib import admin
+        from apps.accounts.admin import UserAdmin
+
+        self.assertEqual(str(admin.site.site_header), "Tarqatuv boshqaruv tizimi")
+        self.assertEqual(str(admin.site.index_title), "Boshqaruv bo‘limlari")
+        self.assertEqual(
+            [str(title) for title, _options in UserAdmin.fieldsets],
+            [
+                "Kirish ma’lumotlari",
+                "Kompaniya va vazifa",
+                "Hisob holati",
+                "Boshqaruv huquqlari",
+                "Faollik va vaqt",
+            ],
+        )
 
 
 class OrderSummarySerializer(serializers.Serializer):

@@ -421,6 +421,143 @@ class AdminApiTests(TestCase):
         )
         self.assertEqual(denied.status_code, 400)
 
+    def test_staff_admin_can_edit_reset_password_and_deactivate_company_staff(self):
+        created = self.client.post(
+            "/api/v1/admin/staff/",
+            {
+                "phone": "+998900004012",
+                "role": User.Role.COMPANY_ADMIN,
+                "password": "temporary-password",
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        staff = User.objects.get(pk=created.data["id"])
+        old_auth_version = staff.auth_version
+
+        edited = self.client.patch(
+            f"/api/v1/admin/staff/{staff.pk}/",
+            {"phone": "+998900004013"},
+            format="json",
+        )
+        self.assertEqual(edited.status_code, 200, edited.data)
+        self.assertEqual(edited.data["phone"], "+998900004013")
+        self.assertTrue(AuditLog.objects.filter(
+            actor=self.admin, entity_type="User", entity_id=str(staff.pk), action="update"
+        ).exists())
+
+        mismatch = self.client.post(
+            f"/api/v1/admin/staff/{staff.pk}/reset-password/",
+            {"password": "New-Safe-Password-939!", "password_confirm": "other-password"},
+            format="json",
+        )
+        self.assertEqual(mismatch.status_code, 400)
+
+        reset = self.client.post(
+            f"/api/v1/admin/staff/{staff.pk}/reset-password/",
+            {
+                "password": "New-Safe-Password-939!",
+                "password_confirm": "New-Safe-Password-939!",
+            },
+            format="json",
+        )
+        self.assertEqual(reset.status_code, 200, reset.data)
+        staff.refresh_from_db()
+        self.assertTrue(staff.check_password("New-Safe-Password-939!"))
+        self.assertGreater(staff.auth_version, old_auth_version)
+        self.assertTrue(AuditLog.objects.filter(
+            actor=self.admin,
+            entity_type="User",
+            entity_id=str(staff.pk),
+            action="reset_password",
+        ).exists())
+
+        deactivated = self.client.post(
+            f"/api/v1/admin/staff/{staff.pk}/deactivate/", {}, format="json"
+        )
+        self.assertEqual(deactivated.status_code, 200)
+        staff.refresh_from_db()
+        self.assertFalse(staff.is_active)
+        self.assertTrue(staff.is_blocked)
+
+        self_deactivation = self.client.post(
+            f"/api/v1/admin/staff/{self.admin.pk}/deactivate/", {}, format="json"
+        )
+        self.assertEqual(self_deactivation.status_code, 400)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+        self_update = self.client.patch(
+            f"/api/v1/admin/staff/{self.admin.pk}/",
+            {"phone": "+998900004019"},
+            format="json",
+        )
+        self.assertEqual(self_update.status_code, 400)
+        self_password_reset = self.client.post(
+            f"/api/v1/admin/staff/{self.admin.pk}/reset-password/",
+            {
+                "password": "New-Safe-Password-939!",
+                "password_confirm": "New-Safe-Password-939!",
+            },
+            format="json",
+        )
+        self.assertEqual(self_password_reset.status_code, 400)
+
+    def test_staff_management_rejects_other_company_ids_and_ordinary_staff(self):
+        for method, path, data in (
+            ("patch", f"/api/v1/admin/staff/{self.other_admin.pk}/", {"phone": "+998900004015"}),
+            (
+                "post",
+                f"/api/v1/admin/staff/{self.other_admin.pk}/reset-password/",
+                {"password": "New-Safe-Password-939!", "password_confirm": "New-Safe-Password-939!"},
+            ),
+            ("post", f"/api/v1/admin/staff/{self.other_admin.pk}/deactivate/", {}),
+        ):
+            response = getattr(self.client, method)(path, data, format="json")
+            self.assertEqual(response.status_code, 404, response.data)
+
+        ordinary_employee = User.objects.create_user(
+            phone="+998900004016",
+            password="temporary-password",
+            company=self.company,
+            role=User.Role.DRIVER,
+        )
+        self.client.force_authenticate(ordinary_employee)
+        for method, path, data in (
+            ("get", "/api/v1/admin/staff/", None),
+            (
+                "post",
+                "/api/v1/admin/staff/",
+                {
+                    "phone": "+998900004017",
+                    "role": User.Role.COMPANY_ADMIN,
+                    "password": "temporary-password",
+                },
+            ),
+            ("patch", f"/api/v1/admin/staff/{ordinary_employee.pk}/", {"phone": "+998900004018"}),
+            ("patch", f"/api/v1/admin/staff/{self.admin.pk}/", {"phone": "+998900004018"}),
+            (
+                "post",
+                f"/api/v1/admin/staff/{ordinary_employee.pk}/reset-password/",
+                {"password": "New-Safe-Password-939!", "password_confirm": "New-Safe-Password-939!"},
+            ),
+            (
+                "post",
+                f"/api/v1/admin/staff/{self.admin.pk}/reset-password/",
+                {"password": "New-Safe-Password-939!", "password_confirm": "New-Safe-Password-939!"},
+            ),
+            ("post", f"/api/v1/admin/staff/{ordinary_employee.pk}/deactivate/", {}),
+        ):
+            response = (
+                getattr(self.client, method)(path)
+                if data is None
+                else getattr(self.client, method)(path, data, format="json")
+            )
+            self.assertEqual(response.status_code, 403, response.data)
+
+        self.admin.refresh_from_db()
+        self.assertEqual(self.admin.phone, "+998900004001")
+        self.assertFalse(self.admin.check_password("New-Safe-Password-939!"))
+
     def test_shop_owner_cannot_create_payment_and_staff_payment_updates_ledger(self):
         self.client.force_authenticate(self.owner)
         denied = self.client.post(
