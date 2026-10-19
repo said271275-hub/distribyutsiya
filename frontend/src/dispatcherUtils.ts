@@ -22,6 +22,37 @@ export const orderStatusLabels: Record<OrderStatus, string> = {
   cancelled: 'Bekor qilindi',
 }
 
+const orderTransitions: Record<OrderStatus, readonly OrderStatus[]> = {
+  new: ['confirmed', 'cancelled'],
+  confirmed: ['loaded', 'cancelled'],
+  loaded: ['in_transit'],
+  in_transit: ['delivered'],
+  delivered: [],
+  cancelled: [],
+}
+
+export function canTransitionOrder(from: OrderStatus, to: OrderStatus) {
+  return orderTransitions[from].includes(to)
+}
+
+export function toggleOrderSelection(selectedIds: number[], orderId: number) {
+  return selectedIds.includes(orderId)
+    ? selectedIds.filter((id) => id !== orderId)
+    : [...selectedIds, orderId]
+}
+
+export function selectNewOrders(
+  selectedIds: number[],
+  pageOrders: Array<{ id: number; status: OrderStatus }>,
+  checked: boolean,
+) {
+  const newOrderIds = pageOrders
+    .filter((order) => order.status === 'new')
+    .map((order) => order.id)
+  if (checked) return [...new Set([...selectedIds, ...newOrderIds])]
+  return selectedIds.filter((id) => !newOrderIds.includes(id))
+}
+
 export function buildOrderQueryParams(filters: OrderFilters) {
   const params: Record<string, string | number> = { page: filters.page }
   if (filters.date) params.date = filters.date

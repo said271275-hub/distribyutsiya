@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildOrderQueryParams,
+  canTransitionOrder,
   formatCurrency,
   formatOrderDate,
   getSuggestionLoad,
   orderStatusLabels,
+  selectNewOrders,
+  toggleOrderSelection,
 } from './dispatcherUtils'
 
 describe('dispetcher yordamchi funksiyalari', () => {
@@ -44,6 +47,28 @@ describe('dispetcher yordamchi funksiyalari', () => {
       delivered: 'Yetkazildi',
       cancelled: 'Bekor qilindi',
     })
+  })
+
+  it('buyurtma uchun faqat backend ruxsat bergan holat o‘tishlarini yoqadi', () => {
+    expect(canTransitionOrder('new', 'confirmed')).toBe(true)
+    expect(canTransitionOrder('new', 'cancelled')).toBe(true)
+    expect(canTransitionOrder('confirmed', 'cancelled')).toBe(true)
+    expect(canTransitionOrder('confirmed', 'loaded')).toBe(true)
+    expect(canTransitionOrder('loaded', 'cancelled')).toBe(false)
+    expect(canTransitionOrder('delivered', 'cancelled')).toBe(false)
+    expect(canTransitionOrder('cancelled', 'confirmed')).toBe(false)
+  })
+
+  it('tanlovga faqat joriy sahifadagi yangi buyurtmalarni qo‘shadi yoki olib tashlaydi', () => {
+    const orders = [
+      { id: 1, status: 'new' as const },
+      { id: 2, status: 'confirmed' as const },
+      { id: 3, status: 'new' as const },
+    ]
+    expect(selectNewOrders([8], orders, true)).toEqual([8, 1, 3])
+    expect(selectNewOrders([1, 3, 8], orders, false)).toEqual([8])
+    expect(toggleOrderSelection([1, 3], 3)).toEqual([1])
+    expect(toggleOrderSelection([1], 3)).toEqual([1, 3])
   })
 
   it('summa va sanani o‘qishga qulay ko‘rinishda chiqaradi', () => {
