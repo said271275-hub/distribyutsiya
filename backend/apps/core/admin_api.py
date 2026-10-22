@@ -1,9 +1,10 @@
 import json
+from datetime import datetime, time
 from decimal import Decimal
 
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
-from django.db.models import Prefetch, Q, Sum
+from django.db.models import F, Prefetch, Q, Sum
 from django.forms.models import model_to_dict
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -18,7 +19,7 @@ from drf_spectacular.utils import extend_schema_field
 
 from apps.accounts.models import User
 from apps.audit.models import AuditLog
-from apps.catalog.models import Product
+from apps.catalog.models import ContainerMovement, Product
 from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
 from apps.core.permissions import CompanyAdminPermission
 from apps.logistics.models import DriverProfile, Trip, Vehicle
@@ -869,6 +870,7 @@ class PaymentInputSerializer(serializers.Serializer):
     shop_id = serializers.IntegerField(min_value=1)
     amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
     method = serializers.ChoiceField(choices=Payment.Method.choices)
+    paid_at = serializers.DateField(required=False)
     reference = serializers.CharField(required=False, allow_blank=True, max_length=120)
     note = serializers.CharField(required=False, allow_blank=True)
     trip_id = serializers.IntegerField(required=False, min_value=1)
@@ -940,6 +942,10 @@ class PaymentAdminViewSet(viewsets.ViewSet):
         elif values.get("trip_id"):
             get_object_or_404(Trip, pk=values["trip_id"], company=company)
 
+        paid_at = (
+            timezone.make_aware(datetime.combine(values["paid_at"], time.min))
+            if "paid_at" in values else timezone.now()
+        )
         with transaction.atomic():
             payment = Payment(
                 company=company,
@@ -947,7 +953,7 @@ class PaymentAdminViewSet(viewsets.ViewSet):
                 amount=values["amount"],
                 method=values["method"],
                 status=Payment.Status.CONFIRMED,
-                paid_at=timezone.now(),
+                paid_at=paid_at,
                 reference=values.get("reference", ""),
                 note=values.get("note", ""),
             )
@@ -986,10 +992,15 @@ class BalanceEntryOutputSerializer(serializers.ModelSerializer):
 class ShopBalanceOutputSerializer(serializers.ModelSerializer):
     shop_name = serializers.CharField(source="shop.name", read_only=True)
     entries = serializers.SerializerMethodField()
+    last_payment_at = serializers.SerializerMethodField()
+    container_deposit = serializers.SerializerMethodField()
 
     class Meta:
         model = ShopBalance
-        fields = ("id", "company_id", "shop_id", "shop_name", "current_balance", "credit_limit", "entries")
+        fields = (
+            "id", "company_id", "shop_id", "shop_name", "current_balance",
+            "credit_limit", "last_payment_at", "container_deposit", "entries",
+        )
 
     @extend_schema_field(BalanceEntryOutputSerializer(many=True))
     def get_entries(self, balance) -> list[dict]:
@@ -998,6 +1009,40 @@ class ShopBalanceOutputSerializer(serializers.ModelSerializer):
             rows = BalanceEntry.objects.filter(company=balance.company, shop=balance.shop)
         rows = [entry for entry in rows if entry.company_id == balance.company_id][:50]
         return BalanceEntryOutputSerializer(rows, many=True).data
+
+    def get_last_payment_at(self, balance):
+        rows = getattr(balance.shop, "company_balance_entries", None)
+        if rows is None:
+            rows = BalanceEntry.objects.filter(
+                company=balance.company, shop=balance.shop
+            ).select_related("payment")
+        payment_dates = [
+            entry.payment.paid_at or entry.payment.created_at
+            for entry in rows
+            if entry.company_id == balance.company_id and entry.payment_id
+        ]
+        latest = max(payment_dates, default=None)
+        return timezone.localtime(latest).date().isoformat() if latest else None
+
+    def get_container_deposit(self, balance):
+        total = ContainerMovement.objects.filter(
+            company=balance.company, shop=balance.shop
+        ).aggregate(
+            total=Sum(F("quantity_delta") * F("container__deposit_amount"))
+        )["total"]
+        return total or Decimal("0.00")
+
+
+class BalanceAdjustmentInputSerializer(serializers.Serializer):
+    shop_id = serializers.IntegerField(min_value=1)
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
+    direction = serializers.ChoiceField(choices=BalanceEntry.Direction.choices)
+    note = serializers.CharField(trim_whitespace=True, max_length=500)
+
+    def validate_note(self, value):
+        if not value:
+            raise serializers.ValidationError("Tuzatish sababini kiriting.")
+        return value
 
 
 class BalanceAdminViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1019,7 +1064,42 @@ class BalanceAdminViewSet(viewsets.ReadOnlyModelViewSet):
         ).select_related("shop").order_by("shop__name", "pk").prefetch_related(
             Prefetch(
                 "shop__balance_entries",
-                queryset=BalanceEntry.objects.filter(company=self.company),
+                queryset=BalanceEntry.objects.filter(company=self.company).select_related("payment"),
                 to_attr="company_balance_entries",
             )
         )
+
+    @extend_schema(
+        request=BalanceAdjustmentInputSerializer,
+        responses={201: BalanceEntryOutputSerializer},
+    )
+    @action(detail=False, methods=("post",))
+    @transaction.atomic
+    def adjust(self, request):
+        serializer = BalanceAdjustmentInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        shop = get_object_or_404(
+            Shop.objects.filter(
+                company_links__company=self.company,
+                company_links__is_active=True,
+            ),
+            pk=values["shop_id"],
+        )
+        entry = BalanceEntry(
+            company=self.company,
+            shop=shop,
+            amount=values["amount"],
+            direction=values["direction"],
+            note=f"Tuzatish: {values['note']}",
+        )
+        entry.full_clean()
+        entry.save()
+        entry.post()
+        audit(request.user, self.company, "adjust", entry, after={
+            "shop_id": shop.pk,
+            "amount": entry.amount,
+            "direction": entry.direction,
+            "note": entry.note,
+        })
+        return Response(BalanceEntryOutputSerializer(entry).data, status=status.HTTP_201_CREATED)

@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.audit.models import AuditLog
-from apps.catalog.models import Product
+from apps.catalog.models import ContainerMovement, Product, ReturnableContainer
 from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
 from apps.logistics.models import DriverProfile, Trip, TripStop, Vehicle
 from apps.orders.models import Order, OrderItem, OrderStatusHistory
@@ -661,10 +661,17 @@ class AdminApiTests(TestCase):
         self.client.force_authenticate(self.admin)
         response = self.client.post(
             "/api/v1/admin/payments/",
-            {"shop_id": self.shop.pk, "amount": "500.00", "method": Payment.Method.CASH},
+            {
+                "shop_id": self.shop.pk,
+                "amount": "500.00",
+                "method": Payment.Method.CASH,
+                "paid_at": "2026-10-01",
+                "note": "Naqd to‘lov",
+            },
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["paid_at"].date().isoformat(), "2026-10-01")
         self.assertEqual(
             ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
             Decimal("-500.00"),
@@ -674,11 +681,92 @@ class AdminApiTests(TestCase):
         self.assertEqual(balances.status_code, 200)
         self.assertEqual(balances.data["results"][0]["current_balance"], "-500.00")
         self.assertEqual(len(balances.data["results"][0]["entries"]), 1)
+        self.assertEqual(balances.data["results"][0]["last_payment_at"], "2026-10-01")
 
         self.client.force_authenticate(self.owner)
         finance = self.client.get("/api/v1/shop/finance/")
         self.assertEqual(finance.status_code, 200)
         self.assertEqual(len(finance.data["entries"]), 1)
+
+    def test_balance_adjustments_are_company_scoped_and_keep_reverse_entries(self):
+        container = ReturnableContainer.objects.create(
+            company=self.company,
+            name="Qaytariladigan idish",
+            deposit_amount=Decimal("250.00"),
+        )
+        ContainerMovement.objects.create(
+            company=self.company,
+            shop=self.shop,
+            container=container,
+            quantity_delta=Decimal("2.00"),
+        )
+        self.client.force_authenticate(self.other_admin)
+        ShopBalance.objects.create(company=self.other_company, shop=self.other_shop)
+        other_balances = self.client.get("/api/v1/admin/balances/")
+        self.assertEqual(
+            [row["shop_id"] for row in other_balances.data["results"]],
+            [self.other_shop.pk],
+        )
+        self.assertEqual(str(other_balances.data["results"][0]["container_deposit"]), "0.00")
+        foreign_adjustment = self.client.post(
+            "/api/v1/admin/balances/adjust/",
+            {
+                "shop_id": self.shop.pk,
+                "amount": "500.00",
+                "direction": BalanceEntry.Direction.DEBIT,
+                "note": "Boshqa kompaniya yozuvi",
+            },
+            format="json",
+        )
+        self.assertEqual(foreign_adjustment.status_code, 404)
+        self.assertFalse(BalanceEntry.objects.filter(shop=self.shop).exists())
+
+        self.client.force_authenticate(self.admin)
+        own_balances = self.client.get("/api/v1/admin/balances/")
+        self.assertEqual(len(own_balances.data["results"]), 1)
+        self.assertEqual(str(own_balances.data["results"][0]["container_deposit"]), "500.0000")
+        for direction, amount, note in (
+            (BalanceEntry.Direction.DEBIT, "1000.00", "Qarz xatosi"),
+            (BalanceEntry.Direction.CREDIT, "1000.00", "Qarz xatosini qaytarish"),
+        ):
+            response = self.client.post(
+                "/api/v1/admin/balances/adjust/",
+                {
+                    "shop_id": self.shop.pk,
+                    "amount": amount,
+                    "direction": direction,
+                    "note": note,
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, 201, response.data)
+            self.assertIsNotNone(response.data["posted_at"])
+
+        entries = BalanceEntry.objects.filter(shop=self.shop).order_by("pk")
+        self.assertEqual(entries.count(), 2)
+        self.assertEqual(
+            list(entries.values_list("direction", flat=True)),
+            [BalanceEntry.Direction.DEBIT, BalanceEntry.Direction.CREDIT],
+        )
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("0.00"),
+        )
+        self.client.force_authenticate(self.owner)
+        shop_finance = self.client.get("/api/v1/shop/finance/")
+        self.assertEqual(shop_finance.status_code, 200)
+        self.assertEqual(shop_finance.data["balances"][0]["container_deposit"], "500.0000")
+        denied_adjustment = self.client.post(
+            "/api/v1/admin/balances/adjust/",
+            {
+                "shop_id": self.shop.pk,
+                "amount": "100.00",
+                "direction": BalanceEntry.Direction.DEBIT,
+                "note": "Do‘kon egasi tuzatishi",
+            },
+            format="json",
+        )
+        self.assertEqual(denied_adjustment.status_code, 403)
 
     def test_driver_can_only_record_payment_for_shop_on_own_trip(self):
         driver_user = User.objects.create_user(

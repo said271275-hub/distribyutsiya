@@ -22,6 +22,7 @@ import {
   MapPin,
   UserRound,
   UsersRound,
+  Wallet,
 } from 'lucide-react'
 import { Fragment } from 'react'
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -52,6 +53,7 @@ const DispatcherCatalogPage = lazy(() => import('./DispatcherCatalogPage'))
 const DispatcherShopsPage = lazy(() => import('./DispatcherShopsPage'))
 const DispatcherFleetPage = lazy(() => import('./DispatcherFleetPage'))
 const DispatcherStaffPage = lazy(() => import('./DispatcherStaffPage'))
+const DispatcherFinancePage = lazy(() => import('./DispatcherFinancePage'))
 
 type DashboardData = {
   date: string
@@ -177,7 +179,9 @@ function DispatcherPanel() {
               ? 'Mashinalar va haydovchilar'
               : location.pathname.startsWith('/company/staff')
                 ? 'Xodimlar'
-          : 'Umumiy ko‘rinish'
+                : location.pathname.startsWith('/company/finance')
+                  ? 'Qarz va to‘lov'
+                  : 'Umumiy ko‘rinish'
 
   return (
     <div className="dispatcher-shell">
@@ -205,6 +209,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/shops" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <MapPin size={18} strokeWidth={1.8} /><span>Do‘konlar</span>
+          </NavLink>
+          <NavLink to="/company/finance" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <Wallet size={18} strokeWidth={1.8} /><span>Qarz va to‘lov</span>
           </NavLink>
           <NavLink to="/company/fleet" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <Truck size={18} strokeWidth={1.8} /><span>Mashinalar va haydovchilar</span>
@@ -240,6 +247,7 @@ function DispatcherPanel() {
             <Route path="picking-list" element={<Suspense fallback={<LoadingState />}><PickingListPage /></Suspense>} />
             <Route path="catalog" element={<Suspense fallback={<LoadingState />}><DispatcherCatalogPage /></Suspense>} />
             <Route path="shops" element={<Suspense fallback={<LoadingState />}><DispatcherShopsPage /></Suspense>} />
+            <Route path="finance" element={<Suspense fallback={<LoadingState />}><DispatcherFinancePage /></Suspense>} />
             <Route path="fleet" element={<Suspense fallback={<LoadingState />}><DispatcherFleetPage /></Suspense>} />
             <Route path="staff" element={<Suspense fallback={<LoadingState />}><DispatcherStaffPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/company" replace />} />
@@ -263,6 +271,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/shops" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <MapPin size={19} /><small>Do‘konlar</small>
+          </NavLink>
+          <NavLink to="/company/finance" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
+            <Wallet size={19} /><small>Hisob-kitob</small>
           </NavLink>
           <NavLink to="/company/fleet" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <UserRound size={19} /><small>Transport</small>

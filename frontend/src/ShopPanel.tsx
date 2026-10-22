@@ -27,6 +27,7 @@ import { Controller, useForm } from 'react-hook-form'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { z } from 'zod'
 import api, { apiErrorMessage } from './api'
+import { financeEntryLabel, formatFinanceDate, formatFinanceMoney } from './dispatcherFinanceUtils'
 import { useAuth } from './useAuth'
 import { ru } from './i18n/ru'
 import './ShopPanel.css'
@@ -93,8 +94,19 @@ type ShopOrder = {
 type Page<T> = { results: T[]; count: number; next?: string | null; previous?: string | null }
 type Finance = {
   balance: string
-  balances: Array<{ company_id: number; company_name: string; balance: string }>
+  balances: Array<{ company_id: number; company_name: string; balance: string; container_deposit: string }>
   payments: Array<{ id: number; company_name: string; amount: string; method: string; status: string; paid_at: string | null; created_at: string; reference: string }>
+  entries: Array<{
+    id: number
+    company_id: number
+    amount: string
+    direction: 'debit' | 'credit'
+    order_id: number | null
+    payment_id: number | null
+    note: string
+    posted_at: string | null
+    created_at: string
+  }>
 }
 
 const uz: Record<CopyKey, string> = {
@@ -632,11 +644,21 @@ function ShopProfilePage({ t }: { t: Copy }) {
 
 function FinancePage({ t }: { t: Copy }) {
   const query = useQuery({ queryKey: ['shop-finance'], queryFn: async () => (await api.get<Finance>('/v1/shop/finance/')).data })
+  const containerDeposit = query.data?.balances.reduce(
+    (total, item) => total + Number(item.container_deposit),
+    0,
+  ) ?? 0
   return <><PageHeading eyebrow="HISOB-KITOB" title={t('finance')} description="Qarz balansi va qayd etilgan to‘lovlar." />
     {query.isLoading ? <LoadingRows /> : query.isError ? <ErrorState message="Hisob-kitobni yuklab bo‘lmadi" onRetry={() => void query.refetch()} t={t} /> : <>
-      <section className="shop-balance-panel"><span><Wallet size={19} />{t('balance')}</span><strong>{money(query.data?.balance ?? 0)}</strong><small>{query.data?.balances.map((item) => `${item.company_name}: ${money(item.balance)}`).join(' · ')}</small></section>
+      <section className="shop-balance-panel"><span><Wallet size={19} />{t('balance')}</span><strong>{money(query.data?.balance ?? 0)}</strong><small>{query.data?.balances.map((item) => `${item.company_name}: ${money(item.balance)}`).join(' · ')}</small><small>Tara depoziti alohida: {money(containerDeposit)}</small></section>
       <section className="shop-finance-history"><div className="shop-section-head"><div><span className="shop-eyebrow">TO‘LOVLAR</span><h2>{t('paymentHistory')}</h2></div><CreditCard size={20} /></div>
         {!query.data?.payments.length ? <div className="shop-inline-empty">{t('noPayments')}</div> : query.data.payments.map((payment) => <article className="shop-payment-row" key={payment.id}><span className="shop-payment-icon"><CreditCard size={18} /></span><div><strong>{payment.company_name}</strong><small>{payment.paid_at ? new Date(payment.paid_at).toLocaleDateString('uz-UZ') : new Date(payment.created_at).toLocaleDateString('uz-UZ')} · {payment.method}</small></div><b>{money(payment.amount)}</b></article>)}
+      </section>
+      <section className="shop-finance-history"><div className="shop-section-head"><div><span className="shop-eyebrow">BALANS YOZUVLARI</span><h2>Hisob-kitob tarixi</h2></div><Wallet size={20} /></div>
+        {!query.data?.entries.length ? <div className="shop-inline-empty">Hozircha hisob-kitob yozuvi yo‘q</div> : query.data.entries.map((entry) => {
+          const company = query.data?.balances.find((item) => item.company_id === entry.company_id)
+          return <article className="shop-payment-row" key={entry.id}><span className="shop-payment-icon"><CreditCard size={18} /></span><div><strong>{company?.company_name ?? 'Kompaniya'} · {financeEntryLabel(entry)}</strong><small>{formatFinanceDate(entry.posted_at ?? entry.created_at)} · {entry.note || 'Izohsiz'}</small></div><b>{entry.direction === 'debit' ? '+' : '−'}{formatFinanceMoney(entry.amount)}</b></article>
+        })}
       </section>
     </>}
   </>
