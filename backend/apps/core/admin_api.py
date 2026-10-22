@@ -343,10 +343,14 @@ class ShopAdminSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        balance = ShopBalance.objects.filter(
-            company=company_for_request(self.context["request"]), shop=instance
-        ).first()
+        company = company_for_request(self.context["request"])
+        balance = ShopBalance.objects.filter(company=company, shop=instance).first()
         data["credit_limit"] = balance.credit_limit if balance else None
+        link_active = CompanyShopLink.objects.filter(
+            company=company, shop=instance, is_active=True
+        ).exists()
+        if not link_active:
+            data["status"] = Shop.Status.ARCHIVED
         return data
 
     def validate_owner_id(self, owner):
@@ -367,10 +371,18 @@ class ShopAdminViewSet(
     filter_backends = ()
 
     def get_queryset(self):
-        return Shop.objects.filter(
-            company_links__company=self.company,
-            company_links__is_active=True,
-        ).distinct().order_by("name")
+        shops = Shop.objects.filter(company_links__company=self.company)
+        shop_status = self.request.query_params.get("status")
+        if shop_status == "archived":
+            shops = shops.filter(company_links__is_active=False)
+        elif shop_status in ("active", "inactive"):
+            shops = shops.filter(
+                company_links__is_active=True,
+                status=shop_status,
+            )
+        elif shop_status != "all":
+            shops = shops.filter(company_links__is_active=True)
+        return shops.distinct().order_by("name")
 
     def perform_create(self, serializer):
         shop = serializer.save()
@@ -405,6 +417,34 @@ class ShopAdminViewSet(
             shop.save(update_fields=("status", "updated_at"))
         audit(request.user, self.company, "archive", shop, {"link_active": was_active}, {
             "link_active": False, "status": shop.status,
+        })
+        return Response({"status": shop.status})
+
+    @action(detail=True, methods=("post",))
+    @transaction.atomic
+    def restore(self, request, pk=None):
+        if request.user.role != User.Role.COMPANY_ADMIN:
+            raise PermissionDenied("Do‘konni faqat o‘z kompaniyasining administratori tiklay oladi.")
+        shop = get_object_or_404(
+            Shop.objects.filter(company_links__company=self.company),
+            pk=pk,
+        )
+        link = get_object_or_404(
+            CompanyShopLink.objects.select_for_update(),
+            shop=shop,
+            company=self.company,
+        )
+        before = {
+            "link_active": link.is_active,
+            "status": shop.status,
+        }
+        link.is_active = True
+        link.save(update_fields=("is_active", "updated_at"))
+        shop.status = Shop.Status.ACTIVE
+        shop.save(update_fields=("status", "updated_at"))
+        audit(request.user, self.company, "restore", shop, before, {
+            "link_active": True,
+            "status": shop.status,
         })
         return Response({"status": shop.status})
 

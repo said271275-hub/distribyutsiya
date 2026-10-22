@@ -387,6 +387,97 @@ class AdminApiTests(TestCase):
         self.assertEqual(archived.status_code, 200)
         self.assertFalse(CompanyShopLink.objects.get(shop=self.shop, company=self.company).is_active)
 
+    def test_archived_shop_can_be_restored_without_changing_orders_or_financial_data(self):
+        order = self.make_order()
+        payment = Payment.objects.create(
+            company=self.company,
+            shop=self.shop,
+            amount=Decimal("250.00"),
+            method=Payment.Method.CASH,
+        )
+        entry = BalanceEntry.objects.create(
+            company=self.company,
+            shop=self.shop,
+            amount=Decimal("250.00"),
+            direction=BalanceEntry.Direction.CREDIT,
+            payment=payment,
+            posted_at=timezone.now(),
+        )
+        balance = ShopBalance.objects.get(company=self.company, shop=self.shop)
+        balance.current_balance = Decimal("1750.00")
+        balance.save(update_fields=("current_balance", "updated_at"))
+        order_snapshot = (order.status, order.total_price, order.items.count())
+        financial_snapshot = (
+            balance.current_balance,
+            Payment.objects.filter(shop=self.shop).count(),
+            BalanceEntry.objects.filter(shop=self.shop).count(),
+            payment.amount,
+            entry.amount,
+        )
+
+        archived = self.client.post(
+            f"/api/v1/admin/shops/{self.shop.pk}/archive/", {}, format="json"
+        )
+        self.assertEqual(archived.status_code, 200, archived.data)
+        archived_shops = self.client.get(
+            "/api/v1/admin/shops/", {"status": "all", "page_size": 100}
+        )
+        self.assertEqual(archived_shops.status_code, 200, archived_shops.data)
+        archived_row = next(
+            row for row in archived_shops.data["results"] if row["id"] == self.shop.pk
+        )
+        self.assertEqual(archived_row["status"], Shop.Status.ARCHIVED)
+
+        restored = self.client.post(
+            f"/api/v1/admin/shops/{self.shop.pk}/restore/", {}, format="json"
+        )
+        self.assertEqual(restored.status_code, 200, restored.data)
+        self.assertEqual(restored.data["status"], Shop.Status.ACTIVE)
+        self.assertTrue(CompanyShopLink.objects.get(
+            company=self.company, shop=self.shop
+        ).is_active)
+        self.shop.refresh_from_db()
+        order.refresh_from_db()
+        balance.refresh_from_db()
+        payment.refresh_from_db()
+        entry.refresh_from_db()
+        self.assertEqual(order_snapshot, (order.status, order.total_price, order.items.count()))
+        self.assertEqual(financial_snapshot, (
+            balance.current_balance,
+            Payment.objects.filter(shop=self.shop).count(),
+            BalanceEntry.objects.filter(shop=self.shop).count(),
+            payment.amount,
+            entry.amount,
+        ))
+        self.assertTrue(AuditLog.objects.filter(
+            actor=self.admin,
+            entity_type="Shop",
+            entity_id=str(self.shop.pk),
+            action="restore",
+        ).exists())
+
+        self.client.force_authenticate(self.owner)
+        catalog = self.client.get("/api/v1/catalog/")
+        self.assertEqual(catalog.status_code, 200, catalog.data)
+        self.assertEqual([row["id"] for row in catalog.data["results"]], [self.product.pk])
+
+    def test_company_admin_cannot_restore_another_company_shop(self):
+        self.client.post(
+            f"/api/v1/admin/shops/{self.shop.pk}/archive/", {}, format="json"
+        )
+        self.client.force_authenticate(self.other_admin)
+
+        response = self.client.post(
+            f"/api/v1/admin/shops/{self.shop.pk}/restore/", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 404, response.data)
+        self.assertFalse(CompanyShopLink.objects.get(
+            company=self.company, shop=self.shop
+        ).is_active)
+        self.shop.refresh_from_db()
+        self.assertEqual(self.shop.status, Shop.Status.ARCHIVED)
+
     def test_staff_creation_cannot_assign_super_admin_or_other_company(self):
         response = self.client.post(
             "/api/v1/admin/staff/",

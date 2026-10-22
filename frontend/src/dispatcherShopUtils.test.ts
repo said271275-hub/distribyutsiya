@@ -29,11 +29,22 @@ const shops: DispatcherShop[] = [
     longitude: '68.820000',
     status: 'inactive',
   },
+  {
+    id: 3,
+    name: 'Arxivlangan do‘kon',
+    phone_primary: '+998900000003',
+    phone_secondary: '',
+    address: 'Yangi ko‘cha',
+    district: 'Guliston',
+    latitude: '40.840000',
+    longitude: '68.660000',
+    status: 'archived',
+  },
 ]
 
 describe('dispetcher do‘kon yordamchi funksiyalari', () => {
   it('nom, telefon yoki manzil bo‘yicha qidiradi', () => {
-    expect(filterShops(shops, { search: 'GULISTON', district: 'all', status: 'all' })).toEqual([shops[0]])
+    expect(filterShops(shops, { search: 'GULISTON', district: 'all', status: 'all' })).toEqual([shops[0], shops[2]])
     expect(filterShops(shops, { search: '900000011', district: 'all', status: 'all' })).toEqual([shops[0]])
     expect(filterShops(shops, { search: 'Markaziy', district: 'all', status: 'all' })).toEqual([shops[1]])
   })
@@ -41,6 +52,7 @@ describe('dispetcher do‘kon yordamchi funksiyalari', () => {
   it('tuman va holat filtrlarini birga qo‘llaydi', () => {
     expect(filterShops(shops, { search: '', district: 'Yangiyer', status: 'inactive' })).toEqual([shops[1]])
     expect(filterShops(shops, { search: '', district: 'Guliston', status: 'inactive' })).toEqual([])
+    expect(filterShops(shops, { search: '', district: 'all', status: 'archived' })).toEqual([shops[2]])
   })
 
   it('do‘kon ma’lumotlarini yangilash uchun API shaklida tayyorlaydi', () => {

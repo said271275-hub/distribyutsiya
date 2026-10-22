@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Archive, MapPin, Pencil, Phone, Search, X } from 'lucide-react'
+import { Archive, MapPin, Pencil, Phone, RotateCcw, Search, X } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -50,7 +50,7 @@ export default function DispatcherShopsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [district, setDistrict] = useState('all')
-  const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all')
+  const [status, setStatus] = useState<'all' | 'active' | 'inactive' | 'archived'>('all')
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null)
   const [editingShop, setEditingShop] = useState<DispatcherShop | null>(null)
   const [error, setError] = useState('')
@@ -69,7 +69,7 @@ export default function DispatcherShopsPage() {
   const shops = useQuery({
     queryKey: ['dispatcher-shops'],
     queryFn: async () => (
-      await api.get<Page<DispatcherShop>>('/v1/admin/shops/', { params: { page_size: 100 } })
+      await api.get<Page<DispatcherShop>>('/v1/admin/shops/', { params: { page_size: 100, status: 'all' } })
     ).data,
   })
   const rows = shops.data?.results ?? emptyShops
@@ -107,6 +107,18 @@ export default function DispatcherShopsPage() {
       await queryClient.invalidateQueries({ queryKey: ['dispatcher-shops'] })
     },
     onError: (failure) => setError(apiErrorMessage(failure, 'Do‘konni arxivlab bo‘lmadi. Qayta urinib ko‘ring.')),
+  })
+
+  const restoreShop = useMutation({
+    mutationFn: async (shopId: number) => (
+      await api.post<ShopStatusResponse>(`/v1/admin/shops/${shopId}/restore/`, {})
+    ).data,
+    onSuccess: async (_response, shopId) => {
+      setError('')
+      setSelectedShopId(shopId)
+      await queryClient.invalidateQueries({ queryKey: ['dispatcher-shops'] })
+    },
+    onError: (failure) => setError(apiErrorMessage(failure, 'Do‘konni qayta tiklab bo‘lmadi. Qayta urinib ko‘ring.')),
   })
 
   const openEdit = (shop: DispatcherShop) => {
@@ -169,6 +181,7 @@ export default function DispatcherShopsPage() {
               <option value="all">Barcha holatlar</option>
               <option value="active">Faol</option>
               <option value="inactive">Nofaol</option>
+              <option value="archived">Arxivlangan</option>
             </select>
           </label>
         </div>
@@ -210,7 +223,13 @@ export default function DispatcherShopsPage() {
                   setError('')
                   archiveShop.mutate(selectedShop.id)
                 }}
+                onRestore={() => {
+                  if (!window.confirm(`“${selectedShop.name}” do‘koni kompaniyangiz ro‘yxatiga qayta tiklansinmi?`)) return
+                  setError('')
+                  restoreShop.mutate(selectedShop.id)
+                }}
                 archiving={archiveShop.isPending}
+                restoring={restoreShop.isPending}
               />
             )}
           </div>
@@ -266,12 +285,16 @@ function ShopDetails({
   shop,
   onEdit,
   onArchive,
+  onRestore,
   archiving,
+  restoring,
 }: {
   shop: DispatcherShop
   onEdit: () => void
   onArchive: () => void
+  onRestore: () => void
   archiving: boolean
+  restoring: boolean
 }) {
   return (
     <article className="dispatcher-shop-details">
@@ -294,8 +317,14 @@ function ShopDetails({
         <DispatcherShopMap shop={shop} />
       </Suspense>
       <div className="dispatcher-shop-detail-actions">
-        <button type="button" className="dispatcher-order-action" onClick={onEdit}><Pencil size={14} /> Tahrirlash</button>
         {shop.status !== 'archived' && (
+          <button type="button" className="dispatcher-order-action" onClick={onEdit}><Pencil size={14} /> Tahrirlash</button>
+        )}
+        {shop.status === 'archived' ? (
+          <button type="button" className="dispatcher-order-action" disabled={restoring} onClick={onRestore}>
+            <RotateCcw size={14} /> {restoring ? 'Tiklanmoqda…' : 'Qayta tiklash'}
+          </button>
+        ) : (
           <button type="button" className="dispatcher-order-action dispatcher-order-cancel" disabled={archiving} onClick={onArchive}>
             <Archive size={14} /> {archiving ? 'Arxivlanmoqda…' : 'Arxivlash'}
           </button>

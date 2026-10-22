@@ -15,7 +15,7 @@ export type DispatcherShop = {
 export type ShopFilters = {
   search: string
   district: string
-  status: 'all' | 'active' | 'inactive'
+  status: 'all' | 'active' | 'inactive' | 'archived'
 }
 
 export type ShopFormValues = Pick<
