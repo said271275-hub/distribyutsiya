@@ -18,7 +18,7 @@ class ShopCompanyBalanceSerializer(serializers.Serializer):
     company_id = serializers.IntegerField()
     company_name = serializers.CharField()
     balance = serializers.DecimalField(max_digits=14, decimal_places=2)
-    container_deposit = serializers.DecimalField(max_digits=18, decimal_places=4)
+    container_deposit = serializers.DecimalField(max_digits=18, decimal_places=2)
 
 
 class ShopPaymentHistorySerializer(serializers.Serializer):
@@ -77,8 +77,8 @@ class ShopFinanceView(APIView):
             balances.append({
                 "company_id": link.company_id,
                 "company_name": link.company.name,
-                "balance": str(balance),
-                "container_deposit": str(container_deposit),
+                "balance": format(balance, ".2f"),
+                "container_deposit": format(container_deposit, ".2f"),
             })
         payments = Payment.objects.filter(
             shop=shop, company_id__in=[link.company_id for link in links]
@@ -87,14 +87,14 @@ class ShopFinanceView(APIView):
             shop=shop, company_id__in=[link.company_id for link in links]
         )[:50]
         return Response({
-            "balance": str(total),
+            "balance": format(total, ".2f"),
             "balances": balances,
             "payments": [
                 {
                     "id": payment.pk,
                     "company_id": payment.company_id,
                     "company_name": payment.company.name,
-                    "amount": str(payment.amount),
+                    "amount": format(payment.amount, ".2f"),
                     "method": payment.method,
                     "status": payment.status,
                     "paid_at": payment.paid_at,

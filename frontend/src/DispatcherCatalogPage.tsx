@@ -43,7 +43,7 @@ const emptyProduct: ProductFormValues = {
 }
 
 function formatAmount(value: string | null) {
-  return value === null ? 'Asosiy narx' : `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 2 }).format(Number(value))} so‘m`
+  return value === null ? 'Asosiy narx' : `${new Intl.NumberFormat('uz-UZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value))} so‘m`
 }
 
 export default function DispatcherCatalogPage() {

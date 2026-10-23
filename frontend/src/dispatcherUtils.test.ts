@@ -72,8 +72,8 @@ describe('dispetcher yordamchi funksiyalari', () => {
   })
 
   it('summa va sanani o‘qishga qulay ko‘rinishda chiqaradi', () => {
-    expect(formatCurrency('125000')).toContain('125')
-    expect(formatCurrency(125000)).toContain('so‘m')
+    expect(formatCurrency('125000')).toBe('125 000,00 so‘m')
+    expect(formatCurrency(125000)).toBe('125 000,00 so‘m')
     expect(formatOrderDate('2026-10-17')).toBe('17-oktabr 2026-yil')
   })
 

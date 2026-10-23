@@ -911,14 +911,14 @@ class PaymentAdminViewSet(viewsets.ViewSet):
             ).distinct()
         paginator = AdminPage()
         page = paginator.paginate_queryset(payments, request, view=self)
-        return paginator.get_paginated_response([
+        return paginator.get_paginated_response(PaymentOutputSerializer([
             {
                 "id": payment.pk, "shop_id": payment.shop_id, "amount": payment.amount,
                 "method": payment.method, "status": payment.status,
                 "paid_at": payment.paid_at, "reference": payment.reference, "note": payment.note,
             }
             for payment in page
-        ])
+        ], many=True).data)
 
     @extend_schema(request=PaymentInputSerializer, responses={201: PaymentOutputSerializer})
     def create(self, request):
@@ -971,11 +971,11 @@ class PaymentAdminViewSet(viewsets.ViewSet):
             audit(request.user, company, "create", payment, after={
                 "shop_id": shop.pk, "amount": payment.amount, "method": payment.method,
             })
-        return Response({
+        return Response(PaymentOutputSerializer({
             "id": payment.pk, "shop_id": shop.pk, "amount": payment.amount,
             "method": payment.method, "status": payment.status, "paid_at": payment.paid_at,
             "reference": payment.reference, "note": payment.note,
-        }, status=status.HTTP_201_CREATED)
+        }).data, status=status.HTTP_201_CREATED)
 
 
 class BalanceEntryOutputSerializer(serializers.ModelSerializer):
@@ -994,6 +994,15 @@ class ShopBalanceOutputSerializer(serializers.ModelSerializer):
     entries = serializers.SerializerMethodField()
     last_payment_at = serializers.SerializerMethodField()
     container_deposit = serializers.SerializerMethodField()
+
+    @extend_schema_field(serializers.DecimalField(max_digits=18, decimal_places=2))
+    def get_container_deposit(self, balance):
+        total = ContainerMovement.objects.filter(
+            company=balance.company, shop=balance.shop
+        ).aggregate(
+            total=Sum(F("quantity_delta") * F("container__deposit_amount"))
+        )["total"]
+        return format(total or Decimal("0.00"), ".2f")
 
     class Meta:
         model = ShopBalance
@@ -1023,14 +1032,6 @@ class ShopBalanceOutputSerializer(serializers.ModelSerializer):
         ]
         latest = max(payment_dates, default=None)
         return timezone.localtime(latest).date().isoformat() if latest else None
-
-    def get_container_deposit(self, balance):
-        total = ContainerMovement.objects.filter(
-            company=balance.company, shop=balance.shop
-        ).aggregate(
-            total=Sum(F("quantity_delta") * F("container__deposit_amount"))
-        )["total"]
-        return total or Decimal("0.00")
 
 
 class BalanceAdjustmentInputSerializer(serializers.Serializer):

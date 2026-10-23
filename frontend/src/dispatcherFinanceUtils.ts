@@ -39,7 +39,7 @@ export function financeEntryLabel(entry: FinanceEntry) {
 }
 
 export function formatFinanceMoney(value: string | number) {
-  return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 2 }).format(Number(value))} so‘m`
+  return `${new Intl.NumberFormat('uz-UZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value))} so‘m`
 }
 
 export function formatFinanceDate(value: string | null) {

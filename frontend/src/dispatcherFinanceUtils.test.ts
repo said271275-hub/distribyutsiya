@@ -52,6 +52,6 @@ describe('dispatcher finance utilities', () => {
   })
 
   it('formats amounts in so‘m', () => {
-    expect(formatFinanceMoney('125000')).toContain('so‘m')
+    expect(formatFinanceMoney('125000')).toBe('125 000,00 so‘m')
   })
 })

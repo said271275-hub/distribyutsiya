@@ -671,7 +671,8 @@ class AdminApiTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["paid_at"].date().isoformat(), "2026-10-01")
+        self.assertEqual(response.data["amount"], "500.00")
+        self.assertTrue(response.data["paid_at"].startswith("2026-10-01"))
         self.assertEqual(
             ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
             Decimal("-500.00"),
@@ -687,6 +688,7 @@ class AdminApiTests(TestCase):
         finance = self.client.get("/api/v1/shop/finance/")
         self.assertEqual(finance.status_code, 200)
         self.assertEqual(len(finance.data["entries"]), 1)
+        self.assertEqual(finance.data["payments"][0]["amount"], "500.00")
 
     def test_balance_adjustments_are_company_scoped_and_keep_reverse_entries(self):
         container = ReturnableContainer.objects.create(
@@ -724,7 +726,7 @@ class AdminApiTests(TestCase):
         self.client.force_authenticate(self.admin)
         own_balances = self.client.get("/api/v1/admin/balances/")
         self.assertEqual(len(own_balances.data["results"]), 1)
-        self.assertEqual(str(own_balances.data["results"][0]["container_deposit"]), "500.0000")
+        self.assertEqual(own_balances.data["results"][0]["container_deposit"], "500.00")
         for direction, amount, note in (
             (BalanceEntry.Direction.DEBIT, "1000.00", "Qarz xatosi"),
             (BalanceEntry.Direction.CREDIT, "1000.00", "Qarz xatosini qaytarish"),
@@ -755,7 +757,7 @@ class AdminApiTests(TestCase):
         self.client.force_authenticate(self.owner)
         shop_finance = self.client.get("/api/v1/shop/finance/")
         self.assertEqual(shop_finance.status_code, 200)
-        self.assertEqual(shop_finance.data["balances"][0]["container_deposit"], "500.0000")
+        self.assertEqual(shop_finance.data["balances"][0]["container_deposit"], "500.00")
         denied_adjustment = self.client.post(
             "/api/v1/admin/balances/adjust/",
             {

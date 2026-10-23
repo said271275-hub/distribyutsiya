@@ -62,7 +62,7 @@ export function buildOrderQueryParams(filters: OrderFilters) {
 }
 
 export function formatCurrency(value: string | number) {
-  return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Number(value))} so‘m`
+  return `${new Intl.NumberFormat('uz-UZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value))} so‘m`
 }
 
 export function formatOrderDate(value: string) {
