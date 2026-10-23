@@ -171,7 +171,14 @@ class ShopApiTests(TestCase):
         self.assertEqual([item["id"] for item in response.data["results"]], [self.product.pk])
 
     def test_order_uses_server_price_and_records_initial_status(self):
-        response = self.client.post("/api/v1/orders/", self.order_payload(), format="json")
+        before_cutoff = timezone.make_aware(
+            datetime.combine(timezone.localdate(), time(17, 0)),
+            timezone.get_current_timezone(),
+        )
+        with patch("apps.orders.shop_services.timezone.localtime", return_value=before_cutoff):
+            response = self.client.post(
+                "/api/v1/orders/", self.order_payload(), format="json"
+            )
 
         self.assertEqual(response.status_code, 201, response.data)
         order = Order.objects.get(pk=response.data["id"])
@@ -229,21 +236,31 @@ class ShopApiTests(TestCase):
         self.assertEqual(denied.status_code, 400)
 
     def test_order_can_be_edited_and_repeated_with_fresh_server_pricing(self):
-        created = self.client.post("/api/v1/orders/", self.order_payload(), format="json")
-        order_id = created.data["id"]
-        edited = self.client.patch(
-            f"/api/v1/orders/{order_id}/",
-            {"note": "Eshik yoniga olib keling", "items": [{"product_id": self.product.pk, "quantity": "3"}]},
-            format="json",
+        before_cutoff = timezone.make_aware(
+            datetime.combine(timezone.localdate(), time(17, 0)),
+            timezone.get_current_timezone(),
         )
-        self.assertEqual(edited.status_code, 200)
-        self.assertEqual(edited.data["total_price"], "2160.00")
+        with patch("apps.orders.shop_services.timezone.localtime", return_value=before_cutoff):
+            created = self.client.post(
+                "/api/v1/orders/", self.order_payload(), format="json"
+            )
+            order_id = created.data["id"]
+            edited = self.client.patch(
+                f"/api/v1/orders/{order_id}/",
+                {
+                    "note": "Eshik yoniga olib keling",
+                    "items": [{"product_id": self.product.pk, "quantity": "3"}],
+                },
+                format="json",
+            )
+            self.assertEqual(edited.status_code, 200)
+            self.assertEqual(edited.data["total_price"], "2160.00")
 
-        repeated = self.client.post(
-            f"/api/v1/orders/{order_id}/repeat/",
-            {"delivery_date": (timezone.localdate() + timedelta(days=2)).isoformat()},
-            format="json",
-        )
+            repeated = self.client.post(
+                f"/api/v1/orders/{order_id}/repeat/",
+                {"delivery_date": (timezone.localdate() + timedelta(days=2)).isoformat()},
+                format="json",
+            )
         self.assertEqual(repeated.status_code, 201, repeated.data)
         self.assertNotEqual(repeated.data["id"], order_id)
         self.assertEqual(repeated.data["total_price"], "2160.00")

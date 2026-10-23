@@ -11,6 +11,7 @@ import './App.css'
 
 const ShopPanel = lazy(() => import('./ShopPanel'))
 const DispatcherPanel = lazy(() => import('./DispatcherPanel'))
+const DriverPanel = lazy(() => import('./DriverPanel'))
 
 const phoneSchema = z
   .string()
@@ -329,7 +330,13 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
         ) : null}
       </div>
 
-      {staff && <div className="staff-access-note"><span>⌑</span> Bu sahifada faqat kompaniya xodimlari kira oladi.</div>}
+      {staff && (
+        <div className="staff-access-note">
+          <span>⌑</span>
+          Haydovchi sifatida kirish uchun kompaniya dispetcheri bergan telefon raqami va paroldan foydalaning.
+          Tizim administratori hisobi haydovchi panelini ochmaydi.
+        </div>
+      )}
       <div className="mobile-story-note"><span className="eyebrow-dot" /> Buyurtma va yetkazish boshqaruvi — bir tizimda</div>
     </AuthShell>
   )
@@ -662,7 +669,7 @@ function App() {
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute roles={['super_admin']}><RoleLandingPage /></ProtectedRoute>} />
       <Route path="/company/*" element={<ProtectedRoute roles={['company_admin']}><Suspense fallback={<main className="full-loader">Yuklanmoqda…</main>}><DispatcherPanel /></Suspense></ProtectedRoute>} />
-      <Route path="/driver" element={<ProtectedRoute roles={['driver']}><RoleLandingPage /></ProtectedRoute>} />
+      <Route path="/driver/*" element={<ProtectedRoute roles={['driver']}><Suspense fallback={<main className="full-loader">Yuklanmoqda…</main>}><DriverPanel /></Suspense></ProtectedRoute>} />
       <Route path="/shop/*" element={<ProtectedRoute roles={['shop_owner']}><Suspense fallback={<main className="full-loader">Yuklanmoqda…</main>}><ShopPanel /></Suspense></ProtectedRoute>} />
       <Route path="*" element={<IndexRedirect />} />
     </Routes>

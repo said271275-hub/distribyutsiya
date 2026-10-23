@@ -575,6 +575,88 @@ class TripApiTests(TestCase):
         self.client.force_authenticate(self.other_driver_user)
         self.assertEqual(self.client.get("/api/v1/driver/trips/").data, [])
 
+    def test_driver_trips_include_stop_details_load_list_and_are_scoped_by_driver_company_and_date(self):
+        trip_date = timezone.localdate()
+        own_trip = self.create_trip(delivery_date=trip_date)
+        order = self.make_order(shop=self.shop, quantity="3.00", delivery_date=trip_date)
+        self.add_stop(own_trip, self.shop, [order.pk])
+
+        other_same_company_user = User.objects.create_user(
+            phone="+998901110005",
+            company=self.company,
+            role=User.Role.DRIVER,
+        )
+        other_same_company_driver = DriverProfile.objects.create(
+            company=self.company, user=other_same_company_user
+        )
+        same_company_trip = Trip.objects.create(
+            company=self.company,
+            date=trip_date,
+            vehicle=self.vehicle,
+            driver=other_same_company_driver,
+        )
+        TripStop.objects.create(
+            company=self.company,
+            trip=same_company_trip,
+            shop=self.nearby_shop,
+            sequence=1,
+        )
+        foreign_trip = Trip.objects.create(
+            company=self.other_company,
+            date=trip_date,
+            vehicle=self.other_vehicle,
+            driver=self.other_driver,
+        )
+        TripStop.objects.create(
+            company=self.other_company,
+            trip=foreign_trip,
+            shop=self.other_shop,
+            sequence=1,
+        )
+        future_trip = self.create_trip(delivery_date=trip_date + timedelta(days=1))
+
+        self.client.force_authenticate(self.driver_user)
+        response = self.client.get(
+            "/api/v1/driver/trips/",
+            {"date": trip_date.isoformat()},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([row["id"] for row in response.data], [own_trip.pk])
+        trip_data = response.data[0]
+        self.assertEqual(trip_data["vehicle_name"], self.vehicle.name)
+        self.assertEqual(trip_data["vehicle_plate_number"], self.vehicle.plate_number)
+        self.assertEqual(trip_data["stops"][0]["shop_name"], self.shop.name)
+        self.assertEqual(trip_data["stops"][0]["address"], self.shop.address)
+        self.assertEqual(trip_data["stops"][0]["phone"], self.shop.phone_primary)
+        self.assertEqual(trip_data["stops"][0]["orders"][0]["id"], order.pk)
+        self.assertEqual(
+            trip_data["stops"][0]["orders"][0]["items"][0]["product_name"],
+            self.product.name,
+        )
+        self.assertEqual(
+            trip_data["picking_list"],
+            [{"product_name": self.product.name, "unit": self.product.unit, "quantity": "3.00"}],
+        )
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/driver/trips/",
+                {"date": (trip_date + timedelta(days=1)).isoformat()},
+            ).data[0]["id"],
+            future_trip.pk,
+        )
+        self.assertEqual(
+            self.client.get("/api/v1/driver/trips/", {"date": "not-a-date"}).status_code,
+            400,
+        )
+        self.client.force_authenticate(other_same_company_user)
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/driver/trips/",
+                {"date": trip_date.isoformat()},
+            ).data[0]["id"],
+            same_company_trip.pk,
+        )
+
     def test_manual_route_order_eta_and_external_osrm_failure_fallback(self):
         self.assertEqual(
             nearest_neighbor_order(

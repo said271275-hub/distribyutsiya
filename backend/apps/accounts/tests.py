@@ -237,6 +237,14 @@ class AuthFlowTests(TestCase):
         self.assertEqual(self.login(staff=True, phone=self.shop_user.phone).status_code, 401)
         self.assertEqual(self.login(phone=self.staff_user.phone).status_code, 401)
 
+    def test_driver_can_login_through_staff_endpoint(self):
+        response = self.login(staff=True, phone=self.driver_user.phone)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["user"]["id"], self.driver_user.pk)
+        self.assertEqual(response.data["user"]["role"], User.Role.DRIVER)
+        self.assertEqual(response.data["user"]["company_id"], self.company_a.pk)
+
     def test_registration_uses_one_time_sms_code_and_phone_is_unique(self):
         with override_settings(
             OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",

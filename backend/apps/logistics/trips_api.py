@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, F, Sum
+from django.db.models import Count, F, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
@@ -14,7 +14,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_field
 
 from apps.accounts.models import User
 from apps.audit.models import AuditLog
@@ -27,7 +27,7 @@ from apps.logistics.routing import (
     great_circle_km,
     nearest_neighbor_order,
 )
-from apps.orders.models import Order
+from apps.orders.models import Order, OrderItem
 
 
 class TripPage(PageNumberPagination):
@@ -91,6 +91,92 @@ class TripOutputSerializer(serializers.ModelSerializer):
             "vehicle_capacity", "driver_id", "driver_phone", "status",
             "routing_source", "stops", "created_at", "updated_at",
         )
+
+
+class DriverTripOrderItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    unit = serializers.CharField(source="product.unit", read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ("product_name", "unit", "quantity")
+
+
+class DriverTripOrderSerializer(serializers.ModelSerializer):
+    items = DriverTripOrderItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = ("id", "status", "total_price", "items")
+
+
+class DriverPickingListItemSerializer(serializers.Serializer):
+    product_name = serializers.CharField()
+    unit = serializers.CharField()
+    quantity = serializers.CharField()
+
+
+class DriverTripStopSerializer(serializers.ModelSerializer):
+    shop_name = serializers.CharField(source="shop.name", read_only=True)
+    address = serializers.CharField(source="shop.address", read_only=True)
+    phone = serializers.CharField(source="shop.phone_primary", read_only=True)
+    district = serializers.CharField(source="shop.district", read_only=True)
+    latitude = serializers.DecimalField(
+        source="shop.latitude", max_digits=9, decimal_places=6, read_only=True
+    )
+    longitude = serializers.DecimalField(
+        source="shop.longitude", max_digits=9, decimal_places=6, read_only=True
+    )
+    orders = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TripStop
+        fields = (
+            "id", "shop_id", "shop_name", "address", "phone", "district", "latitude",
+            "longitude", "sequence", "eta", "eta_window_from",
+            "eta_window_to", "orders",
+        )
+
+    @extend_schema_field(DriverTripOrderSerializer(many=True))
+    def get_orders(self, stop) -> list[dict]:
+        return DriverTripOrderSerializer(
+            [link.order for link in stop.driver_order_links], many=True
+        ).data
+
+
+class DriverTripOutputSerializer(serializers.ModelSerializer):
+    vehicle_name = serializers.CharField(source="vehicle.name", read_only=True)
+    vehicle_plate_number = serializers.CharField(source="vehicle.plate_number", read_only=True)
+    stops = DriverTripStopSerializer(many=True, read_only=True)
+    picking_list = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Trip
+        fields = (
+            "id", "date", "vehicle_name", "vehicle_plate_number", "status",
+            "stops", "picking_list",
+        )
+
+    @extend_schema_field(DriverPickingListItemSerializer(many=True))
+    def get_picking_list(self, trip) -> list[dict]:
+        totals = {}
+        for stop in trip.stops.all():
+            for link in stop.driver_order_links:
+                for item in link.order.items.all():
+                    row = totals.setdefault(item.product_id, {
+                        "product_name": item.product.name,
+                        "unit": item.product.unit,
+                        "quantity": Decimal("0"),
+                    })
+                    row["quantity"] += item.quantity
+        return [
+            {**row, "quantity": str(row["quantity"])}
+            for row in totals.values()
+        ]
+
+
+class DriverTripQuerySerializer(serializers.Serializer):
+    date = serializers.DateField(required=False)
 
 
 class StopCreateSerializer(serializers.Serializer):
@@ -227,10 +313,20 @@ class DashboardSerializer(serializers.Serializer):
     trips_by_status = serializers.DictField(child=serializers.IntegerField())
 
 
-def _trip_queryset(company, *, driver=None):
+def _trip_queryset(company, *, driver=None, driver_details=False):
     queryset = Trip.objects.filter(company=company).select_related(
         "company", "vehicle", "driver__user"
-    ).prefetch_related("stops__shop", "stops__order_links")
+    ).prefetch_related("stops__shop")
+    if driver_details:
+        queryset = queryset.prefetch_related(Prefetch(
+            "stops__order_links",
+            queryset=TripStopOrder.objects.select_related("order").prefetch_related(
+                "order__items__product"
+            ),
+            to_attr="driver_order_links",
+        ))
+    else:
+        queryset = queryset.prefetch_related("stops__order_links")
     if driver is not None:
         queryset = queryset.filter(driver__user=driver)
     return queryset.order_by("-date", "-created_at")
@@ -904,12 +1000,17 @@ class TripStopOrdersView(APIView):
 class DriverTripListView(APIView):
     permission_classes = (IsAuthenticated, DriverPermission)
 
-    @extend_schema(responses=TripOutputSerializer(many=True))
+    @extend_schema(parameters=[DriverTripQuerySerializer], responses=DriverTripOutputSerializer(many=True))
     def get(self, request):
-        trips = _trip_queryset(request.user.company, driver=request.user).exclude(
-            status=Trip.Status.CANCELLED
-        )
-        return Response(TripOutputSerializer(trips, many=True).data)
+        query = DriverTripQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        trip_date = query.validated_data.get("date", timezone.localdate())
+        trips = _trip_queryset(
+            request.user.company, driver=request.user, driver_details=True
+        ).filter(
+            date=trip_date
+        ).exclude(status=Trip.Status.CANCELLED)
+        return Response(DriverTripOutputSerializer(trips, many=True).data)
 
 
 class RouteSettingsView(APIView):
