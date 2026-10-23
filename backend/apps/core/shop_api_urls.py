@@ -16,6 +16,7 @@ from apps.core.admin_api import (
 from apps.logistics.trips_api import (
     DashboardView,
     DriverTripListView,
+    DriverStopDeliveredView,
     RouteSettingsView,
     TripAdminViewSet,
     TripStopOrdersView,
@@ -63,4 +64,9 @@ urlpatterns = [
         name="admin-trip-stop-orders",
     ),
     path("driver/trips/", DriverTripListView.as_view(), name="driver-trips"),
+    path(
+        "driver/trips/<int:trip_id>/stops/<int:stop_id>/delivered/",
+        DriverStopDeliveredView.as_view(),
+        name="driver-trip-stop-delivered",
+    ),
 ]

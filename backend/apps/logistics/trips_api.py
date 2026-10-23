@@ -133,7 +133,7 @@ class DriverTripStopSerializer(serializers.ModelSerializer):
         model = TripStop
         fields = (
             "id", "shop_id", "shop_name", "address", "phone", "district", "latitude",
-            "longitude", "sequence", "eta", "eta_window_from",
+            "longitude", "sequence", "eta", "eta_window_from", "delivered_at",
             "eta_window_to", "orders",
         )
 
@@ -1011,6 +1011,99 @@ class DriverTripListView(APIView):
             date=trip_date
         ).exclude(status=Trip.Status.CANCELLED)
         return Response(DriverTripOutputSerializer(trips, many=True).data)
+
+
+class DriverStopDeliveredView(APIView):
+    permission_classes = (IsAuthenticated, DriverPermission)
+
+    @extend_schema(request=None, responses=DriverTripOutputSerializer)
+    @transaction.atomic
+    def post(self, request, trip_id, stop_id):
+        trip = get_object_or_404(
+            Trip.objects.select_for_update().filter(
+                company=request.user.company,
+                driver__user=request.user,
+            ),
+            pk=trip_id,
+        )
+        stop = get_object_or_404(
+            TripStop.objects.select_for_update().filter(trip=trip),
+            pk=stop_id,
+        )
+        if stop.delivered_at:
+            result = _trip_queryset(
+                request.user.company, driver=request.user, driver_details=True
+            ).get(pk=trip.pk)
+            return Response(DriverTripOutputSerializer(result).data)
+        if trip.status not in (Trip.Status.CONFIRMED, Trip.Status.IN_PROGRESS):
+            raise ValidationError({"trip": "Faqat tasdiqlangan yoki yo‘ldagi reysda yetkazishni belgilash mumkin."})
+
+        links = list(
+            TripStopOrder.objects.select_for_update()
+            .filter(trip_stop=stop)
+            .select_related("order")
+            .order_by("order_id")
+        )
+        for link in links:
+            order = link.order
+            if order.company_id != trip.company_id or order.shop_id != stop.shop_id:
+                raise ValidationError({"stop": "Reys nuqtasidagi buyurtma mos emas."})
+            if order.status == Order.Status.DELIVERED:
+                continue
+            if order.status not in (
+                Order.Status.CONFIRMED,
+                Order.Status.LOADED,
+                Order.Status.IN_TRANSIT,
+            ):
+                raise ValidationError({"order": "Reysdagi buyurtmani yetkazish holatiga o‘tkazib bo‘lmaydi."})
+
+            if order.status == Order.Status.CONFIRMED:
+                transition_order(
+                    order=order,
+                    actor=request.user,
+                    target=Order.Status.LOADED,
+                    reason="Haydovchi yetkazishni boshladi",
+                )
+            if order.status in (Order.Status.CONFIRMED, Order.Status.LOADED):
+                transition_order(
+                    order=order,
+                    actor=request.user,
+                    target=Order.Status.IN_TRANSIT,
+                    reason="Haydovchi yo‘lga chiqdi",
+                )
+            transition_order(
+                order=order,
+                actor=request.user,
+                target=Order.Status.DELIVERED,
+                reason="Haydovchi do‘konga yetkazdi",
+            )
+
+        stop.delivered_at = timezone.now()
+        stop.save(update_fields=("delivered_at", "updated_at"))
+        has_undelivered_stops = TripStop.objects.filter(
+            trip=trip, delivered_at__isnull=True
+        ).exists()
+        trip.status = (
+            Trip.Status.IN_PROGRESS if has_undelivered_stops else Trip.Status.COMPLETED
+        )
+        trip.save(update_fields=("status", "updated_at"))
+        AuditLog.objects.create(
+            company=trip.company,
+            actor=request.user,
+            action="trip.stop.delivered",
+            entity_type="TripStop",
+            entity_id=str(stop.pk),
+            after={
+                "trip_id": trip.pk,
+                "shop_id": stop.shop_id,
+                "delivered_at": stop.delivered_at.isoformat(),
+                "order_ids": [link.order_id for link in links],
+            },
+        )
+        result = _trip_queryset(
+            request.user.company, driver=request.user, driver_details=True
+        ).get(pk=trip.pk)
+        return Response(DriverTripOutputSerializer(result).data)
 
 
 class RouteSettingsView(APIView):

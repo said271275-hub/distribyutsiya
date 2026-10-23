@@ -988,6 +988,8 @@ class PaymentAdminViewSet(viewsets.ViewSet):
 
     @extend_schema(request=PaymentInputSerializer, responses={201: PaymentOutputSerializer})
     def create(self, request):
+        if request.user.role == User.Role.DRIVER:
+            raise PermissionDenied("Haydovchi to‘lov kirita olmaydi.")
         company = self._company()
         serializer = PaymentInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -996,16 +998,7 @@ class PaymentAdminViewSet(viewsets.ViewSet):
             Shop.objects.filter(company_links__company=company, company_links__is_active=True),
             pk=values["shop_id"],
         )
-        if request.user.role == User.Role.DRIVER:
-            trip_id = values.get("trip_id")
-            if not trip_id:
-                raise ValidationError({"trip_id": "Haydovchi o‘z reysini ko‘rsatishi kerak."})
-            assigned = Trip.objects.filter(
-                pk=trip_id, company=company, driver__user=request.user
-            ).filter(stops__shop=shop).exists()
-            if not assigned:
-                raise PermissionDenied("Do‘kon haydovchining reysiga kiritilmagan.")
-        elif values.get("trip_id"):
+        if values.get("trip_id"):
             get_object_or_404(Trip, pk=values["trip_id"], company=company)
 
         paid_at = (

@@ -907,7 +907,7 @@ class AdminApiTests(TestCase):
         )
         self.assertEqual(denied_adjustment.status_code, 403)
 
-    def test_driver_can_only_record_payment_for_shop_on_own_trip(self):
+    def test_driver_cannot_record_payment_even_for_shop_on_own_trip(self):
         driver_user = User.objects.create_user(
             phone="+998900004020",
             password="driver-password",
@@ -934,7 +934,9 @@ class AdminApiTests(TestCase):
             },
             format="json",
         )
-        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.status_code, 403, response.data)
+        self.assertFalse(Payment.objects.filter(company=self.company, shop=self.shop).exists())
+        self.assertFalse(BalanceEntry.objects.filter(company=self.company, shop=self.shop).exists())
         forbidden = self.client.post(
             "/api/v1/admin/payments/",
             {
@@ -945,4 +947,4 @@ class AdminApiTests(TestCase):
             },
             format="json",
         )
-        self.assertEqual(forbidden.status_code, 404)
+        self.assertEqual(forbidden.status_code, 403)

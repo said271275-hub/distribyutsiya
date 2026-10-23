@@ -657,6 +657,143 @@ class TripApiTests(TestCase):
             same_company_trip.pk,
         )
 
+    def test_driver_can_only_mark_stops_on_own_trip(self):
+        trip = self.create_trip()
+        order = self.make_order()
+        self.add_stop(trip, self.shop, [order.pk])
+        self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+
+        other_same_company_user = User.objects.create_user(
+            phone="+998901110025",
+            company=self.company,
+            role=User.Role.DRIVER,
+        )
+        other_same_company_driver = DriverProfile.objects.create(
+            company=self.company, user=other_same_company_user
+        )
+        other_company_trip = Trip.objects.create(
+            company=self.company,
+            date=date.today(),
+            vehicle=self.vehicle,
+            driver=other_same_company_driver,
+        )
+        same_company_foreign_stop = TripStop.objects.create(
+            company=self.company,
+            trip=other_company_trip,
+            shop=self.nearby_shop,
+            sequence=1,
+        )
+        foreign_trip = Trip.objects.create(
+            company=self.other_company,
+            date=date.today(),
+            vehicle=self.other_vehicle,
+            driver=self.other_driver,
+        )
+        foreign_stop = TripStop.objects.create(
+            company=self.other_company,
+            trip=foreign_trip,
+            shop=self.other_shop,
+            sequence=1,
+        )
+        own_stop = trip.stops.get()
+        self.client.force_authenticate(self.driver_user)
+
+        paths = (
+            f"/api/v1/driver/trips/{trip.pk}/stops/{same_company_foreign_stop.pk}/delivered/",
+            f"/api/v1/driver/trips/{other_company_trip.pk}/stops/{same_company_foreign_stop.pk}/delivered/",
+            f"/api/v1/driver/trips/{foreign_trip.pk}/stops/{foreign_stop.pk}/delivered/",
+        )
+        for path in paths:
+            self.assertEqual(
+                self.client.post(path, {}, format="json").status_code,
+                404,
+            )
+        own_stop.refresh_from_db()
+        self.assertIsNone(own_stop.delivered_at)
+        self.assertIsNone(same_company_foreign_stop.delivered_at)
+        self.assertIsNone(foreign_stop.delivered_at)
+        self.assertEqual(Order.objects.get(pk=order.pk).status, Order.Status.CONFIRMED)
+
+    def test_driver_delivery_marks_all_shop_orders_once_and_updates_trip_and_shop(self):
+        first_order = self.make_order()
+        second_order = self.make_order()
+        next_order = self.make_order(shop=self.nearby_shop)
+        trip = self.create_trip()
+        self.add_stop(trip, self.shop, [first_order.pk, second_order.pk])
+        self.add_stop(trip, self.nearby_shop, [next_order.pk])
+        confirmed = self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+        self.assertEqual(confirmed.status_code, 200, confirmed.data)
+        stops = list(trip.stops.order_by("sequence"))
+
+        self.client.force_authenticate(self.driver_user)
+        path = f"/api/v1/driver/trips/{trip.pk}/stops/{stops[0].pk}/delivered/"
+        delivered = self.client.post(path, {}, format="json")
+        self.assertEqual(delivered.status_code, 200, delivered.data)
+        self.assertEqual(delivered.data["status"], Trip.Status.IN_PROGRESS)
+        first_stop_data = delivered.data["stops"][0]
+        self.assertIsNotNone(first_stop_data["delivered_at"])
+        delivered_at = first_stop_data["delivered_at"]
+        self.assertEqual(
+            [order["id"] for order in first_stop_data["orders"]],
+            [first_order.pk, second_order.pk],
+        )
+        for order in (first_order, second_order):
+            order.refresh_from_db()
+            self.assertEqual(order.status, Order.Status.DELIVERED)
+            self.assertEqual(BalanceEntry.objects.filter(order=order).count(), 1)
+            self.assertEqual(
+                OrderStatusHistory.objects.filter(
+                    order=order, status=Order.Status.DELIVERED
+                ).count(),
+                1,
+            )
+
+        duplicate = self.client.post(path, {}, format="json")
+        self.assertEqual(duplicate.status_code, 200, duplicate.data)
+        self.assertEqual(duplicate.data["stops"][0]["delivered_at"], delivered_at)
+        self.assertEqual(
+            BalanceEntry.objects.filter(order__in=(first_order, second_order)).count(),
+            2,
+        )
+
+        self.client.force_authenticate(self.shop.owner)
+        shop_order = self.client.get(f"/api/v1/orders/{first_order.pk}/")
+        self.assertEqual(shop_order.status_code, 200, shop_order.data)
+        self.assertEqual(shop_order.data["status"], Order.Status.DELIVERED)
+        self.assertEqual(
+            shop_order.data["status_history"][-1]["status"],
+            Order.Status.DELIVERED,
+        )
+
+        self.client.force_authenticate(self.driver_user)
+        last_delivery = self.client.post(
+            f"/api/v1/driver/trips/{trip.pk}/stops/{stops[1].pk}/delivered/",
+            {},
+            format="json",
+        )
+        self.assertEqual(last_delivery.status_code, 200, last_delivery.data)
+        self.assertEqual(last_delivery.data["status"], Trip.Status.COMPLETED)
+        next_order.refresh_from_db()
+        self.assertEqual(next_order.status, Order.Status.DELIVERED)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("2000.00"),
+        )
+
+        self.client.force_authenticate(self.admin)
+        dispatcher_trip = self.client.get(f"/api/v1/admin/trips/{trip.pk}/")
+        self.assertEqual(dispatcher_trip.status_code, 200, dispatcher_trip.data)
+        self.assertEqual(dispatcher_trip.data["status"], Trip.Status.COMPLETED)
+        self.assertIsNotNone(dispatcher_trip.data["stops"][0]["delivered_at"])
+
     def test_manual_route_order_eta_and_external_osrm_failure_fallback(self):
         self.assertEqual(
             nearest_neighbor_order(
@@ -773,7 +910,7 @@ class TripApiTests(TestCase):
         )
 
     @override_settings(DEBUG=True)
-    def test_swagger_schema_lists_trip_planning_dashboard_and_driver_read_routes(self):
+    def test_swagger_schema_lists_trip_planning_dashboard_and_driver_routes(self):
         response = self.client.get("/api/schema/")
 
         self.assertEqual(response.status_code, 200)
@@ -791,5 +928,6 @@ class TripApiTests(TestCase):
             "/api/v1/admin/dashboard/",
             "/api/v1/admin/route-settings/",
             "/api/v1/driver/trips/",
+            "/api/v1/driver/trips/{trip_id}/stops/{stop_id}/delivered/",
         ):
             self.assertIn(path.encode(), response.content)

@@ -1,0 +1,10 @@
+.driver-trip-progress{display:grid;gap:8px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.driver-trip-progress>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px}
+.driver-trip-progress>div:first-child span{color:var(--muted);font-variant-numeric:tabular-nums}
+.driver-trip-progress-track{height:8px;overflow:hidden;border-radius:8px;background:var(--line)}
+.driver-trip-progress-track>span{display:block;height:100%;border-radius:inherit;background:var(--green);transition:width .2s ease}
+.driver-stop-card-delivered{border-color:color-mix(in srgb,var(--green) 35%,var(--line));background:color-mix(in srgb,var(--green-soft) 38%,var(--surface))}
+.driver-stop-delivered{display:flex;align-items:center;gap:7px;color:var(--green);font-size:11px;font-weight:750}
+.driver-mark-delivered{display:flex;min-height:46px;align-items:center;justify-content:center;gap:8px;padding:0 13px;border:0;border-radius:9px;color:#fff;background:var(--green);font:inherit;font-size:12px;font-weight:750}
+.driver-mark-delivered:disabled{cursor:not-allowed;opacity:.55}
+.driver-delivery-error{margin:0 0 12px;padding:10px;border-radius:8px;color:var(--red);background:color-mix(in srgb,var(--red) 9%,var(--surface));font-size:11px}

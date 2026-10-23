@@ -1,0 +1,13 @@
+.dispatcher-trip-progress-list{display:grid;gap:12px}
+.dispatcher-trip-progress-item{display:grid;gap:9px;padding:12px;border:1px solid var(--dispatcher-line);border-radius:9px;background:var(--dispatcher-surface)}
+.dispatcher-trip-progress-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dispatcher-trip-progress-heading>strong{font-size:12px}
+.dispatcher-trip-progress-summary{color:var(--dispatcher-muted);font-size:10px}
+.dispatcher-trip-progress-track{height:7px;overflow:hidden;border-radius:8px;background:var(--dispatcher-line)}
+.dispatcher-trip-progress-track>span{display:block;height:100%;border-radius:inherit;background:var(--green);transition:width .2s ease}
+.dispatcher-trip-progress-stops{display:grid;gap:5px;margin:0;padding:0;list-style:none}
+.dispatcher-trip-progress-stops li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:6px;border-top:1px solid var(--dispatcher-line);color:var(--dispatcher-muted);font-size:10px}
+.dispatcher-trip-progress-stops li>span:last-child{display:grid;justify-items:end;gap:2px}
+.dispatcher-trip-progress-stops li strong{font-size:9px;font-weight:650}
+.dispatcher-trip-progress-stops li small{font-size:8px}
+.dispatcher-trip-progress-stops li.is-delivered{color:var(--green)}

@@ -17,6 +17,7 @@ import {
   type OrderStatus,
 } from './dispatcherUtils'
 import type { MapStop } from './DispatcherMap'
+import './TripProgress.css'
 
 const DispatcherMap = lazy(() => import('./DispatcherMap'))
 
@@ -62,6 +63,10 @@ type TripProposal = {
   stops: TripStopProposal[]
   order_ids: number[]
 }
+type TripStop = MapStop & {
+  id: number
+  delivered_at: string | null
+}
 type SuggestionResponse = {
   date: string
   trips: TripProposal[]
@@ -78,13 +83,21 @@ type Trip = {
   driver_phone: string
   status: string
   routing_source: string
-  stops: MapStop[]
+  stops: TripStop[]
 }
 
 function tomorrow() {
   const date = new Date()
   date.setDate(date.getDate() + 1)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function formatTripDeliveryTime(value: string) {
+  return new Intl.DateTimeFormat('uz-UZ', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: 'Asia/Tashkent',
+  }).format(new Date(value))
 }
 
 const activeTripStatuses = new Set(['planned', 'confirmed', 'in_progress'])
@@ -120,8 +133,10 @@ export default function TripPlanningPage() {
   const tripsQuery = useQuery({
     queryKey: ['dispatcher-trips', date],
     queryFn: async () => (await api.get<Page<Trip>>('/v1/admin/trips/', { params: { page_size: 100 } })).data,
+    refetchInterval: 15_000,
   })
 
+  const dateTrips = (tripsQuery.data?.results ?? []).filter((trip) => trip.date === date)
   const occupiedVehicles = useMemo(
     () => new Set((tripsQuery.data?.results ?? [])
       .filter((trip) => trip.date === date && activeTripStatuses.has(trip.status))
@@ -383,6 +398,64 @@ export default function TripPlanningPage() {
             </section>
           )}
         </div>
+      )}
+
+      {dateTrips.length > 0 && (
+        <section className="dispatcher-card dispatcher-trip-progress" aria-label="Reyslar holati">
+          <div className="dispatcher-section-heading">
+            <div><span className="dispatcher-eyebrow">TANLANGAN SANA</span><h2>Reyslar holati</h2></div>
+            <RouteIcon size={19} />
+          </div>
+          <div className="dispatcher-trip-progress-list">
+            {dateTrips.map((trip) => {
+              const deliveredStops = trip.stops.filter((stop) => Boolean(stop.delivered_at)).length
+              const percentage = trip.stops.length
+                ? Math.round((deliveredStops / trip.stops.length) * 100)
+                : 0
+              const statusLabel = trip.status === 'completed'
+                ? 'Yakunlangan'
+                : trip.status === 'in_progress'
+                  ? 'Yo‘lda'
+                  : trip.status === 'confirmed'
+                    ? 'Tasdiqlangan'
+                    : trip.status === 'cancelled'
+                      ? 'Bekor qilingan'
+                      : 'Rejalashtirilgan'
+              return (
+                <article key={trip.id} className="dispatcher-trip-progress-item">
+                  <div className="dispatcher-trip-progress-heading">
+                    <strong>Reys #{trip.id} · {trip.vehicle_name}</strong>
+                    <span className={`dispatcher-status dispatcher-status-${trip.status}`}>{statusLabel}</span>
+                  </div>
+                  <div className="dispatcher-trip-progress-summary">
+                    Haydovchi: {trip.driver_phone} · {deliveredStops}/{trip.stops.length} do‘kon yetkazildi
+                  </div>
+                  <div
+                    className="dispatcher-trip-progress-track"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={trip.stops.length}
+                    aria-valuenow={deliveredStops}
+                    aria-label={`Reys ${trip.id} bajarilishi`}
+                  >
+                    <span style={{ width: `${percentage}%` }} />
+                  </div>
+                  <ul className="dispatcher-trip-progress-stops">
+                    {trip.stops.map((stop) => (
+                      <li key={stop.id} className={stop.delivered_at ? 'is-delivered' : ''}>
+                        <span>{stop.shop_name}</span>
+                        <span>
+                          <strong>{stop.delivered_at ? 'Yetkazildi' : 'Kutilmoqda'}</strong>
+                          {stop.delivered_at && <small>{formatTripDeliveryTime(stop.delivered_at)}</small>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              )
+            })}
+          </div>
+        </section>
       )}
 
       {savedTrip && (

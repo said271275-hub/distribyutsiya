@@ -1,12 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, LogOut, MapPin, Phone, Truck } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CalendarDays, Check, CheckCircle2, LogOut, MapPin, Phone, Truck } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api, { apiErrorMessage } from './api'
 import type { MapStop } from './DispatcherMap'
+import { getDriverTripProgress, sortDriverStops } from './driverTripUtils'
 import { useAuth } from './useAuth'
 import './DispatcherPlanning.css'
 import './DriverPanel.css'
+import './DriverDelivery.css'
 
 const DriverRouteMap = lazy(() => import('./DispatcherMap'))
 
@@ -18,6 +20,7 @@ type DriverOrder = {
 }
 type DriverStop = Omit<MapStop, 'order_ids'> & {
   id: number
+  delivered_at: string | null
   address: string
   phone: string
   orders: DriverOrder[]
@@ -46,6 +49,14 @@ function formatEta(value: string | null | undefined) {
   }).format(new Date(value))
 }
 
+function formatDeliveredAt(value: string) {
+  return new Intl.DateTimeFormat('uz-UZ', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: 'Asia/Tashkent',
+  }).format(new Date(value))
+}
+
 function tripStatusLabel(status: string) {
   if (status === 'confirmed') return 'Tasdiqlangan'
   if (status === 'in_progress') return 'Yo‘lda'
@@ -61,6 +72,7 @@ function unitLabel(unit: string) {
 export default function DriverPanel() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [date, setDate] = useState(localDate)
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null)
   const [logoutError, setLogoutError] = useState('')
@@ -70,8 +82,24 @@ export default function DriverPanel() {
       await api.get<DriverTrip[]>('/v1/driver/trips/', { params: { date } })
     ).data,
   })
+  const deliveryMutation = useMutation({
+    mutationFn: async ({ tripId, stopId }: { tripId: number; stopId: number }) => (
+      await api.post<DriverTrip>(
+        `/v1/driver/trips/${tripId}/stops/${stopId}/delivered/`,
+        {},
+      )
+    ).data,
+    onSuccess: async (updatedTrip) => {
+      queryClient.setQueryData<DriverTrip[]>(['driver-trips', date], (current) => (
+        current?.map((trip) => trip.id === updatedTrip.id ? updatedTrip : trip)
+      ))
+      await queryClient.invalidateQueries({ queryKey: ['driver-trips', date] })
+    },
+  })
   const trips = tripsQuery.data ?? []
   const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? trips[0] ?? null
+  const orderedStops = selectedTrip ? sortDriverStops(selectedTrip.stops) : []
+  const progress = getDriverTripProgress(selectedTrip?.stops ?? [])
   const mapStops = useMemo<MapStop[]>(
     () => selectedTrip?.stops.map((stop) => ({
       ...stop,
@@ -148,6 +176,19 @@ export default function DriverPanel() {
                   <span className={`driver-trip-status driver-trip-status-${selectedTrip.status}`}>{tripStatusLabel(selectedTrip.status)}</span>
                   <div className="driver-trip-stop-count"><strong>{selectedTrip.stops.length}</strong><span>ta do‘kon</span></div>
                 </section>
+                <section className="driver-trip-progress" aria-label="Reys bajarilishi">
+                  <div><strong>Reys bajarilishi</strong><span>{progress.completed}/{progress.total} do‘kon</span></div>
+                  <div
+                    className="driver-trip-progress-track"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={progress.total}
+                    aria-valuenow={progress.completed}
+                    aria-label="Yetkazilgan do‘konlar"
+                  >
+                    <span style={{ width: `${progress.percentage}%` }} />
+                  </div>
+                </section>
 
                 <section className="driver-section">
                   <div className="driver-section-heading"><div><span className="driver-eyebrow">YO‘NALISH</span><h2>Marshrut xaritasi</h2></div><MapPin size={20} /></div>
@@ -158,10 +199,15 @@ export default function DriverPanel() {
 
                 <section className="driver-section">
                   <div className="driver-section-heading"><div><span className="driver-eyebrow">KETMA-KETLIK BO‘YICHA</span><h2>Do‘konlar</h2></div><span className="driver-count">{selectedTrip.stops.length}</span></div>
+                  {deliveryMutation.isError && (
+                    <p className="driver-delivery-error" role="alert">
+                      {apiErrorMessage(deliveryMutation.error, 'Yetkazilgan holatini saqlab bo‘lmadi.')}
+                    </p>
+                  )}
                   {selectedTrip.stops.length ? (
                     <ol className="driver-stop-list">
-                      {selectedTrip.stops.map((stop, index) => (
-                        <li key={stop.id} className="driver-stop-card">
+                      {orderedStops.map((stop, index) => (
+                        <li key={stop.id} className={`driver-stop-card${stop.delivered_at ? ' driver-stop-card-delivered' : ''}`}>
                           <span className="driver-stop-number">{stop.sequence ?? index + 1}</span>
                           <div className="driver-stop-main">
                             <div className="driver-stop-heading"><div><h3>{stop.shop_name}</h3><span className="driver-stop-eta">Yetib borish: {formatEta(stop.eta)}</span></div></div>
@@ -176,6 +222,30 @@ export default function DriverPanel() {
                                 </div>
                               )) : <span className="driver-muted">Buyurtma biriktirilmagan</span>}
                             </div>
+                            {stop.delivered_at ? (
+                              <div className="driver-stop-delivered" role="status">
+                                <CheckCircle2 size={17} />
+                                Yetkazildi · {formatDeliveredAt(stop.delivered_at)}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="driver-mark-delivered"
+                                disabled={
+                                  deliveryMutation.isPending
+                                  || !['confirmed', 'in_progress'].includes(selectedTrip.status)
+                                }
+                                onClick={() => {
+                                  if (!window.confirm(
+                                    `${stop.shop_name} do‘koni${stop.orders.length ? `dagi ${stop.orders.length} ta buyurtma` : ''} yetkazilgan deb belgilansinmi?`,
+                                  )) return
+                                  deliveryMutation.reset()
+                                  deliveryMutation.mutate({ tripId: selectedTrip.id, stopId: stop.id })
+                                }}
+                              >
+                                <Check size={17} /> Yetkazildi deb belgilash
+                              </button>
+                            )}
                           </div>
                         </li>
                       ))}
