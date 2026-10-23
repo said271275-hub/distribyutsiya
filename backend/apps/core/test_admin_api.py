@@ -108,27 +108,96 @@ class AdminApiTests(TestCase):
         invalid = self.client.get("/api/v1/admin/orders/", {"date": "not-a-date"})
         self.assertEqual(invalid.status_code, 400)
 
-    def test_order_transition_posts_ledger_history_and_audit(self):
+    def test_confirmation_does_not_create_order_debt(self):
         order = self.make_order()
-
         response = self.client.post(
             f"/api/v1/admin/orders/{order.pk}/status/",
             {"status": Order.Status.CONFIRMED, "reason": "Buyurtma tekshirildi"},
             format="json",
         )
-
         self.assertEqual(response.status_code, 200, response.data)
         balance = ShopBalance.objects.get(company=self.company, shop=self.shop)
-        self.assertEqual(balance.current_balance, Decimal("2000.00"))
-        entry = BalanceEntry.objects.get(order=order)
-        self.assertEqual(entry.direction, BalanceEntry.Direction.DEBIT)
-        self.assertEqual(entry.posted_at is not None, True)
+        self.assertEqual(balance.current_balance, Decimal("0.00"))
+        self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
         history = OrderStatusHistory.objects.get(order=order)
         self.assertEqual(history.from_status, Order.Status.NEW)
         self.assertEqual(history.status, Order.Status.CONFIRMED)
+
+    def test_delivery_posts_debt_for_partially_delivered_quantities(self):
+        order = self.make_order(quantity="2.00")
+        self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.CONFIRMED, "reason": "Tasdiq"},
+            format="json",
+        )
+        self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.LOADED, "reason": "Yuklandi"},
+            format="json",
+        )
+        self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.IN_TRANSIT, "reason": "Yo‘lga chiqdi"},
+            format="json",
+        )
+        item = order.items.get()
+        response = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {
+                "status": Order.Status.DELIVERED,
+                "reason": "Qisman yetkazildi",
+                "delivered_items": [{"item_id": item.pk, "quantity": "1.25"}],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["items"][0]["delivered_quantity"], "1.25")
+        item.refresh_from_db()
+        self.assertEqual(item.delivered_quantity, Decimal("1.25"))
+        entry = BalanceEntry.objects.get(order=order)
+        self.assertEqual(entry.direction, BalanceEntry.Direction.DEBIT)
+        self.assertEqual(entry.amount, Decimal("1250.00"))
+        self.assertIsNotNone(entry.posted_at)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("1250.00"),
+        )
         self.assertTrue(AuditLog.objects.filter(
             actor=self.admin, entity_type="Order", entity_id=str(order.pk)
         ).exists())
+
+    def test_delivery_rejects_invalid_quantities_without_posting_debt(self):
+        order = self.make_order(quantity="2.00")
+        for target, reason in (
+            (Order.Status.CONFIRMED, "Tasdiq"),
+            (Order.Status.LOADED, "Yuklandi"),
+            (Order.Status.IN_TRANSIT, "Yo‘lga chiqdi"),
+        ):
+            response = self.client.post(
+                f"/api/v1/admin/orders/{order.pk}/status/",
+                {"status": target, "reason": reason},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200, response.data)
+        item = order.items.get()
+
+        for quantity in ("2.01", "0.00"):
+            response = self.client.post(
+                f"/api/v1/admin/orders/{order.pk}/status/",
+                {
+                    "status": Order.Status.DELIVERED,
+                    "reason": "Yetkazish miqdorini tekshirish",
+                    "delivered_items": [{"item_id": item.pk, "quantity": quantity}],
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, 400, response.data)
+
+        order.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.IN_TRANSIT)
+        self.assertIsNone(item.delivered_quantity)
+        self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
 
     def test_invalid_order_transition_is_rejected(self):
         order = self.make_order()
@@ -147,20 +216,45 @@ class AdminApiTests(TestCase):
             {"status": Order.Status.CONFIRMED, "reason": "Tasdiq"},
             format="json",
         )
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("warning", response.data)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
+        for target, reason in (
+            (Order.Status.LOADED, "Yuklandi"),
+            (Order.Status.IN_TRANSIT, "Yo‘lga chiqdi"),
+        ):
+            response = self.client.post(
+                f"/api/v1/admin/orders/{order.pk}/status/",
+                {"status": target, "reason": reason},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200, response.data)
         response = self.client.post(
             f"/api/v1/admin/orders/{order.pk}/status/",
             {
-                "status": Order.Status.CONFIRMED,
+                "status": Order.Status.DELIVERED,
+                "reason": "Yetkazish",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("warning", response.data)
+        self.assertEqual(Order.objects.get(pk=order.pk).status, Order.Status.IN_TRANSIT)
+        response = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {
+                "status": Order.Status.DELIVERED,
                 "reason": "Limitdan oshishiga ruxsat",
                 "allow_credit_limit_exceeded": True,
             },
             format="json",
         )
         self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("6000.00"),
+        )
 
-    def test_confirmed_order_cancellation_reverses_balance(self):
+    def test_undelivered_order_cancellation_does_not_create_debt(self):
         order = self.make_order()
         self.client.post(
             f"/api/v1/admin/orders/{order.pk}/status/",
@@ -177,7 +271,50 @@ class AdminApiTests(TestCase):
             ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
             Decimal("0.00"),
         )
-        self.assertEqual(BalanceEntry.objects.filter(order=order).count(), 2)
+        self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
+
+    def test_cancelling_delivered_order_reverses_delivered_debt(self):
+        order = self.make_order(quantity="2.00")
+        for target, reason in (
+            (Order.Status.CONFIRMED, "Tasdiq"),
+            (Order.Status.LOADED, "Yuklandi"),
+            (Order.Status.IN_TRANSIT, "Yo‘lga chiqdi"),
+        ):
+            response = self.client.post(
+                f"/api/v1/admin/orders/{order.pk}/status/",
+                {"status": target, "reason": reason},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200, response.data)
+        item = order.items.get()
+        delivered = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {
+                "status": Order.Status.DELIVERED,
+                "reason": "Qisman yetkazildi",
+                "delivered_items": [{"item_id": item.pk, "quantity": "1.25"}],
+            },
+            format="json",
+        )
+        self.assertEqual(delivered.status_code, 200, delivered.data)
+        cancelled = self.client.post(
+            f"/api/v1/admin/orders/{order.pk}/status/",
+            {"status": Order.Status.CANCELLED, "reason": "Bekor qilindi"},
+            format="json",
+        )
+        self.assertEqual(cancelled.status_code, 200, cancelled.data)
+        entries = list(BalanceEntry.objects.filter(order=order).order_by("pk"))
+        self.assertEqual(
+            [(entry.direction, entry.amount) for entry in entries],
+            [
+                (BalanceEntry.Direction.DEBIT, Decimal("1250.00")),
+                (BalanceEntry.Direction.CREDIT, Decimal("1250.00")),
+            ],
+        )
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("0.00"),
+        )
 
     def test_bulk_confirm_and_picking_totals(self):
         delivery_date = date.today() + timedelta(days=1)

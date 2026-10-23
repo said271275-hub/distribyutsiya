@@ -14,9 +14,27 @@ from apps.orders.models import Order, OrderItem
 
 
 class DemoSeedCommandTests(TestCase):
+    @override_settings(
+        DEBUG=True,
+        DEV_OTP_ENABLED=True,
+        DEV_STAFF_PASSWORD="Demo-staff-password-123!",
+    )
+    def test_seed_does_not_create_users_without_demo_users_flag(self):
+        output = StringIO()
+        call_command("seed_demo", stdout=output)
+        call_command("seed_demo", stdout=StringIO())
+
+        company = Company.objects.get(name="Sirdaryo Distribyutsiya")
+        self.assertEqual(Product.objects.filter(company=company).count(), 10)
+        self.assertEqual(Vehicle.objects.filter(company=company).count(), 2)
+        self.assertFalse(User.objects.exists())
+        self.assertFalse(Shop.objects.exists())
+        self.assertIn("0 do‘kon", output.getvalue())
+        self.assertIn("0 haydovchi", output.getvalue())
+
     def test_seed_creates_expected_demo_data_and_is_idempotent(self):
-        call_command("seed_demo", stdout=StringIO())
-        call_command("seed_demo", stdout=StringIO())
+        call_command("seed_demo", "--with-demo-users", stdout=StringIO())
+        call_command("seed_demo", "--with-demo-users", stdout=StringIO())
 
         company = Company.objects.get(name="Sirdaryo Distribyutsiya")
         products = list(Product.objects.filter(company=company))
@@ -38,7 +56,7 @@ class DemoSeedCommandTests(TestCase):
         )
 
     def test_demo_product_loads_split_nearby_orders_into_two_trips(self):
-        call_command("seed_demo", stdout=StringIO())
+        call_command("seed_demo", "--with-demo-users", stdout=StringIO())
         company = Company.objects.get(name="Sirdaryo Distribyutsiya")
         product = Product.objects.get(company=company, name="Demo mahsulot 02")
         shops = list(
@@ -88,7 +106,7 @@ class DemoSeedCommandTests(TestCase):
         DEV_STAFF_PASSWORD="Demo-staff-password-123!",
     )
     def test_seed_staff_can_login_with_configured_local_password(self):
-        call_command("seed_demo", stdout=StringIO())
+        call_command("seed_demo", "--with-demo-users", stdout=StringIO())
 
         user = User.objects.get(phone="+998900009901")
         self.assertTrue(user.check_password("Demo-staff-password-123!"))

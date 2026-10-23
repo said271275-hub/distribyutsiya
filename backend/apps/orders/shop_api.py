@@ -80,7 +80,10 @@ class OrderLineSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ("id", "product_id", "product_name", "unit", "quantity", "unit_price", "line_total")
+        fields = (
+            "id", "product_id", "product_name", "unit", "quantity",
+            "delivered_quantity", "unit_price", "line_total",
+        )
 
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):

@@ -483,7 +483,7 @@ class TripApiTests(TestCase):
             self.assertTrue(OrderStatusHistory.objects.filter(
                 order=order, actor=self.admin, status=Order.Status.CONFIRMED
             ).exists())
-            self.assertTrue(BalanceEntry.objects.filter(order=order).exists())
+            self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
         self.assertTrue(AuditLog.objects.filter(
             actor=self.admin, action="trip.confirm", entity_id=str(trip.pk)
         ).exists())

@@ -14,3 +14,4 @@ dist/
 .pytest_cache/
 .coverage
 htmlcov/
+backend/dev_env.sh

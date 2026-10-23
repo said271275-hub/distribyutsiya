@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, time
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
@@ -83,16 +83,26 @@ class CreditLimitExceeded(APIException):
 
 ORDER_TRANSITIONS = {
     Order.Status.NEW: {Order.Status.CONFIRMED, Order.Status.CANCELLED},
-    Order.Status.CONFIRMED: {Order.Status.LOADED, Order.Status.CANCELLED},
-    Order.Status.LOADED: {Order.Status.IN_TRANSIT},
-    Order.Status.IN_TRANSIT: {Order.Status.DELIVERED},
-    Order.Status.DELIVERED: set(),
+    Order.Status.CONFIRMED: {
+        Order.Status.LOADED, Order.Status.CANCELLED,
+    },
+    Order.Status.LOADED: {Order.Status.IN_TRANSIT, Order.Status.CANCELLED},
+    Order.Status.IN_TRANSIT: {Order.Status.DELIVERED, Order.Status.CANCELLED},
+    Order.Status.DELIVERED: {Order.Status.CANCELLED},
     Order.Status.CANCELLED: set(),
 }
 
 
 @transaction.atomic
-def transition_order(*, order, actor, target, reason, allow_credit_limit_exceeded=False):
+def transition_order(
+    *,
+    order,
+    actor,
+    target,
+    reason,
+    allow_credit_limit_exceeded=False,
+    delivered_items=None,
+):
     order = Order.objects.select_for_update().select_related("shop", "company").get(pk=order.pk)
     previous = order.status
     if target not in ORDER_TRANSITIONS.get(previous, set()):
@@ -100,21 +110,49 @@ def transition_order(*, order, actor, target, reason, allow_credit_limit_exceede
     if not reason.strip():
         raise ValidationError({"reason": "Holat o‘zgarishi sababini kiriting."})
 
-    if target == Order.Status.CONFIRMED:
-        if order.total_price <= 0:
-            raise ValidationError({"order": "Nol qiymatli buyurtmani tasdiqlab bo‘lmaydi."})
+    delivery_total = Decimal("0.00")
+    if target == Order.Status.DELIVERED:
+        items = list(order.items.select_for_update().order_by("pk"))
+        if delivered_items is None:
+            quantities = {item.pk: item.quantity for item in items}
+        else:
+            quantities = {item["item_id"]: item["quantity"] for item in delivered_items}
+            if len(quantities) != len(delivered_items):
+                raise ValidationError({"delivered_items": "Buyurtma bandini takrorlamang."})
+            if set(quantities) != {item.pk for item in items}:
+                raise ValidationError({
+                    "delivered_items": "Har bir buyurtma bandi uchun yetkazilgan miqdorni yuboring."
+                })
+
+        for item in items:
+            quantity = quantities[item.pk]
+            if quantity > item.quantity:
+                raise ValidationError({
+                    "delivered_items": "Yetkazilgan miqdor buyurtma miqdoridan oshmasligi kerak."
+                })
+            item.delivered_quantity = quantity
+            item.save(update_fields=("delivered_quantity", "updated_at"))
+            delivery_total += (quantity * item.unit_price).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+        if not any(quantities.values()):
+            raise ValidationError({
+                "delivered_items": "Yetkazilgan mahsulot miqdori noldan katta bo‘lishi kerak."
+            })
+
+    if target == Order.Status.DELIVERED and delivery_total > 0:
         balance, _ = ShopBalance.objects.get_or_create(
             company=order.company, shop=order.shop
         )
         balance = ShopBalance.objects.select_for_update().get(pk=balance.pk)
         limit = balance.credit_limit
-        projected = balance.current_balance + order.total_price
+        projected = balance.current_balance + delivery_total
         if (
             limit is not None
             and projected > limit
             and not allow_credit_limit_exceeded
         ):
-            raise CreditLimitExceeded(balance.current_balance, limit, order.total_price)
+            raise CreditLimitExceeded(balance.current_balance, limit, delivery_total)
 
     order.status = target
     order.save(update_fields=("status", "updated_at"))
@@ -125,26 +163,38 @@ def transition_order(*, order, actor, target, reason, allow_credit_limit_exceede
         actor=actor,
         note=reason[:500],
     )
-    if target == Order.Status.CONFIRMED:
+    if target == Order.Status.DELIVERED and delivery_total > 0:
         entry = BalanceEntry.objects.create(
             company=order.company,
             shop=order.shop,
-            amount=order.total_price,
+            amount=delivery_total,
             direction=BalanceEntry.Direction.DEBIT,
             order=order,
-            note=f"Buyurtma #{order.pk} tasdiqlandi",
+            note=f"Buyurtma #{order.pk} yetkazildi",
         )
         entry.post()
-    elif target == Order.Status.CANCELLED and previous == Order.Status.CONFIRMED:
-        entry = BalanceEntry.objects.create(
-            company=order.company,
-            shop=order.shop,
-            amount=order.total_price,
-            direction=BalanceEntry.Direction.CREDIT,
+    elif target == Order.Status.CANCELLED:
+        debits = BalanceEntry.objects.filter(
             order=order,
-            note=f"Buyurtma #{order.pk} bekor qilindi",
-        )
-        entry.post()
+            direction=BalanceEntry.Direction.DEBIT,
+            posted_at__isnull=False,
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        credits = BalanceEntry.objects.filter(
+            order=order,
+            direction=BalanceEntry.Direction.CREDIT,
+            posted_at__isnull=False,
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        reversal = debits - credits
+        if reversal > 0:
+            entry = BalanceEntry.objects.create(
+                company=order.company,
+                shop=order.shop,
+                amount=reversal,
+                direction=BalanceEntry.Direction.CREDIT,
+                order=order,
+                note=f"Buyurtma #{order.pk} bekor qilindi",
+            )
+            entry.post()
     audit(actor, order.company, f"order.{target}", order, {"status": previous}, order_state(order))
     return order
 
@@ -699,10 +749,25 @@ class StaffPasswordResetSerializer(serializers.Serializer):
         return attrs
 
 
+class DeliveredItemInputSerializer(serializers.Serializer):
+    item_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal("0.00")
+    )
+
+
 class OrderStatusInputSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Order.Status.choices)
     reason = serializers.CharField(max_length=500)
     allow_credit_limit_exceeded = serializers.BooleanField(required=False, default=False)
+    delivered_items = DeliveredItemInputSerializer(many=True, required=False)
+
+    def validate(self, attrs):
+        if "delivered_items" in attrs and attrs["status"] != Order.Status.DELIVERED:
+            raise serializers.ValidationError({
+                "delivered_items": "Yetkazilgan miqdor faqat yetkazish holatida yuboriladi."
+            })
+        return attrs
 
 
 class BulkConfirmSerializer(serializers.Serializer):
@@ -805,6 +870,7 @@ class OrderAdminViewSet(viewsets.GenericViewSet):
             target=serializer.validated_data["status"],
             reason=serializer.validated_data["reason"],
             allow_credit_limit_exceeded=serializer.validated_data["allow_credit_limit_exceeded"],
+            delivered_items=serializer.validated_data.get("delivered_items"),
         )
         return Response(ShopOrderSerializer(order).data)
 
