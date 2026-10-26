@@ -158,3 +158,18 @@ class TripStopOrder(CompanyOwnedModel):
                 errors["order"] = "Buyurtma reys nuqtasidagi do‘konga tegishli bo‘lishi kerak."
         if errors:
             raise ValidationError(errors)
+
+
+class DriverActionReceipt(models.Model):
+    action_id = models.UUIDField(primary_key=True, editable=False)
+    actor = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="driver_action_receipts",
+    )
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name="driver_action_receipts")
+    stop = models.ForeignKey(TripStop, on_delete=models.CASCADE, related_name="driver_action_receipts")
+    action_type = models.CharField(max_length=16)
+    payload_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)

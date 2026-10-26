@@ -794,6 +794,30 @@ class TripApiTests(TestCase):
         self.assertEqual(dispatcher_trip.data["status"], Trip.Status.COMPLETED)
         self.assertIsNotNone(dispatcher_trip.data["stops"][0]["delivered_at"])
 
+    def test_driver_delivery_idempotency_key_prevents_duplicate_receipts(self):
+        order = self.make_order()
+        trip = self.create_trip()
+        self.add_stop(trip, self.shop, [order.pk])
+        self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+        stop = trip.stops.get()
+        self.client.force_authenticate(self.driver_user)
+        delivery_url = f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/delivered/"
+        headers = {"HTTP_IDEMPOTENCY_KEY": "8e1e9c73-65ea-44b0-872c-d9ce64a6e75a"}
+
+        first = self.client.post(delivery_url, {}, format="json", **headers)
+        replay = self.client.post(delivery_url, {}, format="json", **headers)
+
+        self.assertEqual(first.status_code, 200, first.data)
+        self.assertEqual(replay.status_code, 200, replay.data)
+        self.assertEqual(
+            AuditLog.objects.filter(action="trip.stop.delivered", entity_id=str(stop.pk)).count(),
+            1,
+        )
+
     def test_driver_issue_is_scoped_to_own_trip_and_stop(self):
         own_trip = self.create_trip()
         own_order = self.make_order()
@@ -910,6 +934,39 @@ class TripApiTests(TestCase):
         self.assertEqual(len(shop_order.data["delivery_issue_history"]), 2)
         self.assertEqual(shop_order.data["delivery_issue_history"][0]["reason"], "shop_closed")
         self.assertEqual(shop_order.data["driver_phone"], self.driver_user.phone)
+
+    def test_driver_issue_idempotency_key_prevents_replay_and_key_reuse(self):
+        order = self.make_order()
+        trip = self.create_trip()
+        self.add_stop(trip, self.shop, [order.pk])
+        self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+        stop = trip.stops.get()
+        self.client.force_authenticate(self.driver_user)
+        issue_url = f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/issue/"
+        action_id = "9a330ec5-5ba3-4c6c-9aac-8d9ce31f5e42"
+        headers = {"HTTP_IDEMPOTENCY_KEY": action_id}
+        payload = {"reason": "shop_closed", "note": "Do‘kon yopiq"}
+
+        first = self.client.post(issue_url, payload, format="json", **headers)
+        replay = self.client.post(issue_url, payload, format="json", **headers)
+
+        self.assertEqual(first.status_code, 200, first.data)
+        self.assertEqual(replay.status_code, 200, replay.data)
+        self.assertEqual(
+            AuditLog.objects.filter(action="trip.stop.issue", entity_id=str(stop.pk)).count(),
+            1,
+        )
+        conflict = self.client.post(
+            issue_url,
+            {"reason": "shop_closed", "note": "Boshqa amal"},
+            format="json",
+            **headers,
+        )
+        self.assertEqual(conflict.status_code, 409, conflict.data)
 
     def test_partial_delivery_records_entered_quantity_and_uses_existing_ledger_rule(self):
         order = self.make_order(quantity="2.00")

@@ -5,6 +5,17 @@ import { useNavigate } from 'react-router-dom'
 import api, { apiErrorMessage } from './api'
 import type { MapStop } from './DispatcherMap'
 import { getDriverTripProgress, sortDriverStops } from './driverTripUtils'
+import { applyQueuedDriverAction } from './driverOfflineUtils'
+import {
+  enqueueDriverActionWithTrips,
+  getDriverTrips,
+  getPendingDriverActions,
+  removePendingDriverAction,
+  saveDriverOfflineSession,
+  saveDriverTrips,
+  type DriverActionPayload,
+  type QueuedDriverAction,
+} from './driverOfflineStore'
 import { useAuth } from './useAuth'
 import './DispatcherPlanning.css'
 import './DriverPanel.css'
@@ -102,28 +113,70 @@ export default function DriverPanel() {
   const [logoutError, setLogoutError] = useState('')
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
   const [isInstalled, setIsInstalled] = useState(false)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [usingOfflineSnapshot, setUsingOfflineSnapshot] = useState(false)
+  const [pendingActionCount, setPendingActionCount] = useState(0)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncError, setSyncError] = useState('')
   const [issueStopId, setIssueStopId] = useState<number | null>(null)
   const [issueReason, setIssueReason] = useState<DriverIssueReason | ''>('')
   const [issueNote, setIssueNote] = useState('')
   const [issueQuantities, setIssueQuantities] = useState<Record<number, string>>({})
   const tripsQuery = useQuery({
-    queryKey: ['driver-trips', date],
-    queryFn: async () => (
-      await api.get<DriverTrip[]>('/v1/driver/trips/', { params: { date } })
-    ).data,
+    queryKey: ['driver-trips', user?.id, date],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get<DriverTrip[]>('/v1/driver/trips/', { params: { date } })
+        await saveDriverOfflineSession(user!).catch(() => undefined)
+        const pendingActions = await getPendingDriverActions(user!.id).catch(() => [])
+        const optimisticTrips = pendingActions
+          .filter((action) => action.date === date)
+          .reduce((trips, action) => applyQueuedDriverAction(trips, action), data)
+        await saveDriverTrips(user!.id, date, optimisticTrips).catch(() => undefined)
+        setUsingOfflineSnapshot(false)
+        return optimisticTrips
+      } catch (error) {
+        const cachedTrips = await getDriverTrips<DriverTrip>(user!.id, date).catch(() => undefined)
+        if (!cachedTrips) throw error
+        setUsingOfflineSnapshot(true)
+        return cachedTrips
+      }
+    },
   })
+
+  const enqueueAction = async (
+    type: QueuedDriverAction['type'],
+    tripId: number,
+    stopId: number,
+    payload: DriverActionPayload,
+  ) => {
+    if (!user) throw new Error('Haydovchi sessiyasi topilmadi.')
+    const currentTrips = queryClient.getQueryData<DriverTrip[]>(['driver-trips', user.id, date]) ?? []
+    if (!currentTrips.some((trip) => trip.id === tripId)) {
+      throw new Error('Reysning mahalliy nusxasi topilmadi.')
+    }
+    const action: QueuedDriverAction = {
+      actionId: crypto.randomUUID(),
+      actorId: user.id,
+      tripId,
+      stopId,
+      date,
+      type,
+      payload,
+      createdAt: new Date().toISOString(),
+    }
+    const updatedTrips = applyQueuedDriverAction(currentTrips, action)
+    await enqueueDriverActionWithTrips(action, updatedTrips)
+    return updatedTrips
+  }
+
   const deliveryMutation = useMutation({
-    mutationFn: async ({ tripId, stopId }: { tripId: number; stopId: number }) => (
-      await api.post<DriverTrip>(
-        `/v1/driver/trips/${tripId}/stops/${stopId}/delivered/`,
-        {},
-      )
-    ).data,
-    onSuccess: async (updatedTrip) => {
-      queryClient.setQueryData<DriverTrip[]>(['driver-trips', date], (current) => (
-        current?.map((trip) => trip.id === updatedTrip.id ? updatedTrip : trip)
-      ))
-      await queryClient.invalidateQueries({ queryKey: ['driver-trips', date] })
+    mutationFn: ({ tripId, stopId }: { tripId: number; stopId: number }) => (
+      enqueueAction('delivered', tripId, stopId, {})
+    ),
+    onSuccess: (updatedTrips) => {
+      queryClient.setQueryData<DriverTrip[]>(['driver-trips', user?.id, date], updatedTrips)
+      window.dispatchEvent(new Event('driver-outbox-changed'))
     },
   })
   const issueMutation = useMutation({
@@ -142,25 +195,18 @@ export default function DriverPanel() {
         order_id: number
         items: Array<{ item_id: number; quantity: string }>
       }>
-    }) => (
-      await api.post<DriverTrip>(
-        `/v1/driver/trips/${tripId}/stops/${stopId}/issue/`,
-        {
-          reason,
-          note,
-          ...(deliveredOrders ? { delivered_orders: deliveredOrders } : {}),
-        },
-      )
-    ).data,
-    onSuccess: async (updatedTrip) => {
-      queryClient.setQueryData<DriverTrip[]>(['driver-trips', date], (current) => (
-        current?.map((trip) => trip.id === updatedTrip.id ? updatedTrip : trip)
-      ))
+    }) => enqueueAction('issue', tripId, stopId, {
+      reason,
+      note,
+      ...(deliveredOrders ? { delivered_orders: deliveredOrders } : {}),
+    }),
+    onSuccess: (updatedTrips) => {
+      queryClient.setQueryData<DriverTrip[]>(['driver-trips', user?.id, date], updatedTrips)
       setIssueStopId(null)
       setIssueReason('')
       setIssueNote('')
       setIssueQuantities({})
-      await queryClient.invalidateQueries({ queryKey: ['driver-trips', date] })
+      window.dispatchEvent(new Event('driver-outbox-changed'))
     },
   })
   const trips = tripsQuery.data ?? []
@@ -207,6 +253,92 @@ export default function DriverPanel() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!user || user.role !== 'driver') return
+    let cancelled = false
+    let syncing = false
+
+    const refreshPendingCount = async () => {
+      const actions = await getPendingDriverActions(user.id).catch(() => [])
+      if (!cancelled) setPendingActionCount(actions.length)
+    }
+
+    const synchronizeOutbox = async () => {
+      if (syncing || !navigator.onLine) {
+        await refreshPendingCount()
+        return
+      }
+      syncing = true
+      if (!cancelled) setIsSyncing(true)
+      try {
+        while (!cancelled && navigator.onLine) {
+          const [action] = await getPendingDriverActions(user.id)
+          if (!action) break
+          try {
+            const path = action.type === 'delivered'
+              ? `/v1/driver/trips/${action.tripId}/stops/${action.stopId}/delivered/`
+              : `/v1/driver/trips/${action.tripId}/stops/${action.stopId}/issue/`
+            const { data: updatedTrip } = await api.post<DriverTrip>(path, action.payload, {
+              headers: { 'Idempotency-Key': action.actionId },
+            })
+            const cachedTrips = await getDriverTrips<DriverTrip>(action.actorId, action.date)
+            const currentTrips = cachedTrips
+              ?? queryClient.getQueryData<DriverTrip[]>(['driver-trips', action.actorId, action.date])
+              ?? []
+            const serverTrips = currentTrips.some((trip) => trip.id === updatedTrip.id)
+              ? currentTrips.map((trip) => trip.id === updatedTrip.id ? updatedTrip : trip)
+              : [...currentTrips, updatedTrip]
+            if (action.sequence !== undefined) await removePendingDriverAction(action.sequence)
+            const remainingActions = await getPendingDriverActions(action.actorId)
+            const updatedTrips = remainingActions
+              .filter((pendingAction) => pendingAction.date === action.date)
+              .reduce((trips, pendingAction) => applyQueuedDriverAction(trips, pendingAction), serverTrips)
+            queryClient.setQueryData<DriverTrip[]>(['driver-trips', action.actorId, action.date], updatedTrips)
+            await saveDriverTrips(action.actorId, action.date, updatedTrips)
+            if (!cancelled) {
+              setUsingOfflineSnapshot(false)
+              setSyncError('')
+            }
+          } catch (error) {
+            if (!cancelled) setSyncError(apiErrorMessage(error, 'Navbatdagi amal yuborilmadi.'))
+            break
+          }
+        }
+      } catch {
+        if (!cancelled) setSyncError('Oflayn navbatni o‘qib bo‘lmadi.')
+      } finally {
+        syncing = false
+        if (!cancelled) {
+          setIsSyncing(false)
+          await refreshPendingCount()
+        }
+      }
+    }
+
+    const onOnline = () => {
+      setIsOnline(true)
+      void synchronizeOutbox()
+    }
+    const onOffline = () => setIsOnline(false)
+    const onQueueChanged = () => void synchronizeOutbox()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void synchronizeOutbox()
+    }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    window.addEventListener('driver-outbox-changed', onQueueChanged)
+    document.addEventListener('visibilitychange', onVisible)
+    void refreshPendingCount()
+    void synchronizeOutbox()
+    return () => {
+      cancelled = true
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+      window.removeEventListener('driver-outbox-changed', onQueueChanged)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [user, queryClient])
+
   const installApp = async () => {
     if (!installPrompt) return
     await installPrompt.prompt()
@@ -238,6 +370,24 @@ export default function DriverPanel() {
       </header>
 
       <div className="driver-content">
+        {(!isOnline || pendingActionCount > 0 || syncError || usingOfflineSnapshot) && (
+          <aside className="driver-offline-status" role="status" aria-live="polite">
+            <span>
+              {isSyncing
+                ? 'Amallar sinxronlanmoqda…'
+                : !isOnline
+                  ? 'Oflayn rejim. Reys va amallar qurilmada saqlanadi.'
+                  : `${pendingActionCount} ta amal sinxronlash navbatida`}
+            </span>
+            {usingOfflineSnapshot && <small>Reysning saqlangan nusxasi ko‘rsatilmoqda.</small>}
+            {syncError && <small>{syncError}</small>}
+            {isOnline && pendingActionCount > 0 && !isSyncing && (
+              <button type="button" onClick={() => window.dispatchEvent(new Event('driver-outbox-changed'))}>
+                Qayta yuborish
+              </button>
+            )}
+          </aside>
+        )}
         {!isInstalled && (
           <aside className="driver-pwa-install">
             <div><strong>Haydovchi ilovasini o‘rnating</strong><span>Reyslaringizni telefon ekranidan tez oching.</span></div>

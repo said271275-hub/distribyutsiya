@@ -57,9 +57,11 @@ function requestRefresh() {
         setAccessToken(data.access)
         return data.access
       })
-      .catch(() => {
+      .catch((error: AxiosError) => {
         setAccessToken(null)
-        window.dispatchEvent(new Event('auth:expired'))
+        window.dispatchEvent(new CustomEvent('auth:expired', {
+          detail: { offline: !error.response, status: error.response?.status },
+        }))
         return null
       })
       .finally(() => {

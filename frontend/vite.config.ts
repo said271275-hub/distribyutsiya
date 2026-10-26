@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin, type Rollup } from 'vite'
 import { createHash } from 'node:crypto'
 
 const driverIcons = ['/icons/driver-192.svg', '/icons/driver-512.svg']
@@ -73,7 +73,7 @@ self.addEventListener('fetch', (event) => {
 });`
 }
 
-function driverPwaPlugin() {
+function driverPwaPlugin(): Plugin {
   return {
     name: 'driver-pwa-shell',
     configureServer(server: { middlewares: { use: (path: string, handler: (_request: unknown, response: { setHeader: (name: string, value: string) => void; end: (body: string) => void }) => void) => void } }) {
@@ -84,15 +84,7 @@ function driverPwaPlugin() {
         response.end(driverServiceWorker(['/index.html', ...driverIcons], version, true))
       })
     },
-    generateBundle(_options: unknown, bundle: Record<string, {
-      type: string
-      fileName: string
-      isEntry?: boolean
-      imports?: string[]
-      dynamicImports?: string[]
-      facadeModuleId?: string
-      viteMetadata?: { importedCss?: Set<string>; importedAssets?: Set<string> }
-    }>) {
+    generateBundle(this: Rollup.PluginContext, _options, bundle) {
       const outputs = Object.values(bundle)
       const outputByFile = new Map(outputs.map((output) => [output.fileName, output]))
       const assets = new Set<string>()
@@ -103,10 +95,11 @@ function driverPwaPlugin() {
         const output = outputByFile.get(fileName)
         if (!output) return
         assets.add(fileName)
+        if (output.type !== 'chunk') return
         output.viteMetadata?.importedCss?.forEach((asset) => assets.add(asset))
         output.viteMetadata?.importedAssets?.forEach((asset) => assets.add(asset))
-        output.imports?.forEach((dependency) => addChunk(dependency, false))
-        if (includeDynamic) output.dynamicImports?.forEach((dependency) => addChunk(dependency, true))
+        output.imports.forEach((dependency) => addChunk(dependency, false))
+        if (includeDynamic) output.dynamicImports.forEach((dependency) => addChunk(dependency, true))
       }
       const entry = outputs.find((output) => output.type === 'chunk' && output.isEntry)
       const driver = outputs.find((output) => output.type === 'chunk' && output.facadeModuleId?.endsWith('/DriverPanel.tsx'))

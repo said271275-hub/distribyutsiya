@@ -1,6 +1,9 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
+import hashlib
+import json
+import uuid
 
 from django.conf import settings
 from django.db import transaction
@@ -9,7 +12,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -21,7 +24,14 @@ from apps.audit.models import AuditLog
 from apps.companies.models import Company, CompanyShopLink, Shop
 from apps.core.admin_api import audit, company_for_request, transition_order
 from apps.core.permissions import CompanyAdminPermission, DriverPermission
-from apps.logistics.models import DriverProfile, Trip, TripStop, TripStopOrder, Vehicle
+from apps.logistics.models import (
+    DriverActionReceipt,
+    DriverProfile,
+    Trip,
+    TripStop,
+    TripStopOrder,
+    Vehicle,
+)
 from apps.logistics.routing import (
     calculate_trip_route,
     great_circle_km,
@@ -1099,6 +1109,59 @@ class DriverTripListView(APIView):
         return Response(DriverTripOutputSerializer(trips, many=True).data)
 
 
+class DriverActionIdempotencyConflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Amal identifikatori boshqa so‘rov uchun ishlatilgan."
+    default_code = "idempotency_key_conflict"
+
+
+def _check_driver_action_replay(request, trip, stop, action_type):
+    raw_action_id = request.headers.get("Idempotency-Key")
+    if not raw_action_id:
+        return None
+    try:
+        action_id = uuid.UUID(raw_action_id)
+    except (ValueError, AttributeError):
+        raise ValidationError({"Idempotency-Key": "Yaroqli UUID yuboring."})
+
+    payload = json.dumps(
+        request.data, sort_keys=True, separators=(",", ":"), default=str
+    )
+    payload_hash = hashlib.sha256(
+        f"{action_type}:{trip.pk}:{stop.pk}:{payload}".encode("utf-8")
+    ).hexdigest()
+    receipt = DriverActionReceipt.objects.filter(pk=action_id).first()
+    if receipt is None:
+        return action_id, payload_hash
+    if (
+        receipt.actor_id != request.user.pk
+        or receipt.trip_id != trip.pk
+        or receipt.stop_id != stop.pk
+        or receipt.action_type != action_type
+        or receipt.payload_hash != payload_hash
+    ):
+        raise DriverActionIdempotencyConflict()
+    result = _trip_queryset(
+        request.user.company, driver=request.user, driver_details=True
+    ).get(pk=trip.pk)
+    attach_trip_stop_issue_history([result])
+    return Response(DriverTripOutputSerializer(result).data)
+
+
+def _save_driver_action_receipt(request, trip, stop, action_type, prepared_action):
+    if prepared_action is None:
+        return
+    action_id, payload_hash = prepared_action
+    DriverActionReceipt.objects.create(
+        action_id=action_id,
+        actor=request.user,
+        trip=trip,
+        stop=stop,
+        action_type=action_type,
+        payload_hash=payload_hash,
+    )
+
+
 class DriverStopDeliveredView(APIView):
     permission_classes = (IsAuthenticated, DriverPermission)
 
@@ -1116,7 +1179,15 @@ class DriverStopDeliveredView(APIView):
             TripStop.objects.select_for_update().filter(trip=trip),
             pk=stop_id,
         )
+        prepared_action = _check_driver_action_replay(
+            request, trip, stop, "delivered"
+        )
+        if isinstance(prepared_action, Response):
+            return prepared_action
         if stop.delivered_at:
+            _save_driver_action_receipt(
+                request, trip, stop, "delivered", prepared_action
+            )
             result = _trip_queryset(
                 request.user.company, driver=request.user, driver_details=True
             ).get(pk=trip.pk)
@@ -1187,6 +1258,9 @@ class DriverStopDeliveredView(APIView):
                 "order_ids": [link.order_id for link in links],
             },
         )
+        _save_driver_action_receipt(
+            request, trip, stop, "delivered", prepared_action
+        )
         result = _trip_queryset(
             request.user.company, driver=request.user, driver_details=True
         ).get(pk=trip.pk)
@@ -1211,6 +1285,9 @@ class DriverStopIssueView(APIView):
             TripStop.objects.select_for_update().filter(trip=trip),
             pk=stop_id,
         )
+        prepared_action = _check_driver_action_replay(request, trip, stop, "issue")
+        if isinstance(prepared_action, Response):
+            return prepared_action
         if stop.delivered_at:
             raise ValidationError({"stop": "Yetkazilgan nuqtaga muammo qayd etib bo‘lmaydi."})
         if trip.status not in (Trip.Status.CONFIRMED, Trip.Status.IN_PROGRESS):
@@ -1372,6 +1449,7 @@ class DriverStopIssueView(APIView):
             entity_id=str(stop.pk),
             after=event,
         )
+        _save_driver_action_receipt(request, trip, stop, "issue", prepared_action)
         if values["reason"] == "partial_delivery":
             remaining_orders = TripStopOrder.objects.filter(
                 trip_stop=stop
