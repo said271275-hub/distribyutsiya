@@ -12,6 +12,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, extend_schema_field
 
 from apps.accounts.models import User
+from apps.audit.models import AuditLog
 from apps.catalog.models import Product
 from apps.catalog.shop_api import ShopCatalogProductSerializer
 from apps.companies.models import CompanyShopLink, Shop, ShopPrice
@@ -94,6 +95,63 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
         fields = ("from_status", "status", "actor_phone", "note", "created_at")
 
 
+def _order_issue_history(order, links, events):
+    issues = []
+    stop_ids = {link.trip_stop_id for link in links}
+    for event in events:
+        if int(event.entity_id) not in stop_ids:
+            continue
+        data = event.after or {}
+        if order.pk not in data.get("order_ids", []):
+            continue
+        delivered_order = next(
+            (
+                row for row in data.get("delivered_orders", [])
+                if row.get("order_id") == order.pk
+            ),
+            None,
+        )
+        issues.append({
+            "reason": data.get("reason", ""),
+            "note": data.get("note", ""),
+            "delivered_items": delivered_order.get("items", []) if delivered_order else [],
+            "created_at": event.created_at,
+        })
+    return issues
+
+
+def attach_shop_order_issues(orders):
+    orders = list(orders)
+    stop_order_links = {
+        order.pk: list(getattr(order, "shop_trip_links", ()))
+        for order in orders
+    }
+    stop_ids = {
+        link.trip_stop_id
+        for links in stop_order_links.values()
+        for link in links
+    }
+    if not stop_ids:
+        for order in orders:
+            order.delivery_issue_history = []
+        return
+    events = list(AuditLog.objects.filter(
+        company_id__in={order.company_id for order in orders},
+        action="trip.stop.issue",
+        entity_type="TripStop",
+        entity_id__in=[str(stop_id) for stop_id in stop_ids],
+    ).order_by("created_at"))
+    events_by_company = {}
+    for event in events:
+        events_by_company.setdefault(event.company_id, []).append(event)
+    for order in orders:
+        order.delivery_issue_history = _order_issue_history(
+            order,
+            stop_order_links[order.pk],
+            events_by_company.get(order.company_id, []),
+        )
+
+
 class ShopOrderSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source="company.name", read_only=True)
     shop_name = serializers.CharField(source="shop.name", read_only=True)
@@ -103,6 +161,7 @@ class ShopOrderSerializer(serializers.ModelSerializer):
     eta_window_from = serializers.SerializerMethodField()
     eta_window_to = serializers.SerializerMethodField()
     driver_phone = serializers.SerializerMethodField()
+    delivery_issue_history = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -110,7 +169,7 @@ class ShopOrderSerializer(serializers.ModelSerializer):
             "id", "company_id", "company_name", "shop_id", "shop_name", "status", "delivery_date",
             "delivery_time_from", "delivery_time_to", "total_price", "note", "items",
             "status_history", "eta", "eta_window_from", "eta_window_to",
-            "driver_phone", "created_at", "updated_at",
+            "driver_phone", "delivery_issue_history", "created_at", "updated_at",
         )
 
     def _trip_stop(self, order):
@@ -120,6 +179,7 @@ class ShopOrderSerializer(serializers.ModelSerializer):
                 trip_stop__trip__status__in=(
                     Trip.Status.CONFIRMED,
                     Trip.Status.IN_PROGRESS,
+                    Trip.Status.COMPLETED,
                 )
             ).select_related(
                 "trip_stop__trip__driver__user"
@@ -146,6 +206,22 @@ class ShopOrderSerializer(serializers.ModelSerializer):
         stop = self._trip_stop(order)
         return stop.trip.driver.user.phone if stop else None
 
+    def get_delivery_issue_history(self, order) -> list[dict]:
+        issue_history = getattr(order, "delivery_issue_history", None)
+        if issue_history is not None:
+            return issue_history
+        links = order.trip_stop_links.select_related("trip_stop").all()
+        stop_ids = [link.trip_stop_id for link in links]
+        if not stop_ids:
+            return []
+        events = AuditLog.objects.filter(
+            company_id=order.company_id,
+            action="trip.stop.issue",
+            entity_type="TripStop",
+            entity_id__in=[str(stop_id) for stop_id in stop_ids],
+        ).order_by("created_at")
+        return _order_issue_history(order, links, events)
+
 
 class ShopOrderBaseView(APIView):
     permission_classes = (IsAuthenticated, ShopOwnerPermission)
@@ -167,6 +243,7 @@ class ShopOrderBaseView(APIView):
                         trip_stop__trip__status__in=(
                             Trip.Status.CONFIRMED,
                             Trip.Status.IN_PROGRESS,
+                            Trip.Status.COMPLETED,
                         )
                     ).select_related(
                         "trip_stop__trip__driver__user"
@@ -194,6 +271,7 @@ class ShopOrderListCreateView(ShopOrderBaseView):
                         trip_stop__trip__status__in=(
                             Trip.Status.CONFIRMED,
                             Trip.Status.IN_PROGRESS,
+                            Trip.Status.COMPLETED,
                         )
                     ).select_related("trip_stop__trip__driver__user"),
                     to_attr="shop_trip_links",
@@ -207,6 +285,7 @@ class ShopOrderListCreateView(ShopOrderBaseView):
             orders = orders.filter(status=status_filter)
         paginator = ShopOrderPagination()
         page = paginator.paginate_queryset(orders, request, view=self)
+        attach_shop_order_issues(page)
         return paginator.get_paginated_response(ShopOrderSerializer(page, many=True).data)
 
     @extend_schema(request=ShopOrderWriteSerializer, responses={201: ShopOrderSerializer})

@@ -87,6 +87,12 @@ type ShopOrder = {
   note: string
   items: OrderItem[]
   status_history: Array<{ status: ShopOrder['status']; actor_phone: string | null; note: string; created_at: string }>
+  delivery_issue_history: Array<{
+    reason: string
+    note: string
+    delivered_items: Array<{ item_id: number; quantity: string }>
+    created_at: string
+  }>
   eta: string | null
   driver_phone: string | null
   created_at: string
@@ -155,6 +161,12 @@ const unitLabels: Record<CatalogProduct['unit'], string> = { piece: 'dona', box:
 const statusLabels: Record<ShopOrder['status'], string> = {
   new: 'Yangi', confirmed: 'Tasdiqlandi', loaded: 'Yuklandi',
   in_transit: 'Yo‘lda', delivered: 'Yetkazildi', cancelled: 'Bekor qilindi',
+}
+const deliveryIssueLabels: Record<string, string> = {
+  shop_closed: 'Do‘kon yopiq',
+  refused: 'Qabul qilmadi',
+  partial_delivery: 'Qisman yetkazildi',
+  other: 'Boshqa sabab',
 }
 
 function money(value: string | number) {
@@ -544,6 +556,32 @@ function OrderDetailPage({ t, onNotice }: { t: Copy; onNotice: (value: string) =
       <section className="shop-panel-section"><div className="shop-section-title"><Compass size={19} /><h2>Yetkazish</h2></div><dl className="shop-order-facts"><div><dt>{t('deliveryDate')}</dt><dd>{new Date(`${order.delivery_date}T00:00:00`).toLocaleDateString('uz-UZ')}</dd></div><div><dt>Vaqt oralig‘i</dt><dd>{order.delivery_time_from && order.delivery_time_to ? `${order.delivery_time_from.slice(0, 5)}–${order.delivery_time_to.slice(0, 5)}` : 'Belgilanmagan'}</dd></div>{order.eta && <div><dt>{t('eta')}</dt><dd>{new Date(order.eta).toLocaleString('uz-UZ')}</dd></div>}{order.driver_phone && <div><dt>{t('driver')}</dt><dd><a href={`tel:${order.driver_phone}`}>{order.driver_phone}</a></dd></div>}</dl>{order.note && <p className="shop-order-note">{order.note}</p>}</section>
     </div>
     <section className="shop-panel-section shop-history-section"><div className="shop-section-title"><ClipboardList size={19} /><h2>Holatlar tarixi</h2></div><ol className="shop-status-history">{order.status_history.map((entry, index) => <li key={`${entry.status}-${entry.created_at}-${index}`}><span className="shop-history-dot" /><div><strong>{statusLabels[entry.status]}</strong><small>{new Date(entry.created_at).toLocaleString('uz-UZ')}{entry.actor_phone ? ` · ${entry.actor_phone}` : ''}</small>{entry.note && <p>{entry.note}</p>}</div></li>)}</ol></section>
+    {order.delivery_issue_history.length > 0 && (
+      <section className="shop-panel-section shop-history-section">
+        <div className="shop-section-title"><ClipboardList size={19} /><h2>Yetkazish muammolari tarixi</h2></div>
+        <ol className="shop-status-history">
+          {order.delivery_issue_history.map((issue, index) => (
+            <li key={`${issue.created_at}-${index}`}>
+              <span className="shop-history-dot" style={{ borderColor: 'var(--red)' }} />
+              <div>
+                <strong>{deliveryIssueLabels[issue.reason] ?? issue.reason}</strong>
+                <small>{new Date(issue.created_at).toLocaleString('uz-UZ')}</small>
+                {issue.note && <p>{issue.note}</p>}
+                {issue.delivered_items.length > 0 && (
+                  <p>
+                    Yetkazilgan miqdor:{' '}
+                    {issue.delivered_items.map((row) => {
+                      const item = order.items.find((line) => line.id === row.item_id)
+                      return `${item?.product_name ?? `#${row.item_id}`} — ${row.quantity}`
+                    }).join(', ')}
+                  </p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    )}
     {error && <div className="shop-form-error" role="alert">{error}</div>}
     <div className="shop-order-actions"><button className="shop-secondary-button" type="button" onClick={() => void repeat()}><ClipboardList size={16} />{t('repeat')}</button>{order.status === 'new' && <button className="shop-danger-button" type="button" onClick={() => void cancel()}><X size={16} />{t('cancel')}</button>}</div>
   </>

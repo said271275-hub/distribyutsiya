@@ -11,3 +11,4 @@
 .dispatcher-trip-progress-stops li strong{font-size:9px;font-weight:650}
 .dispatcher-trip-progress-stops li small{font-size:8px}
 .dispatcher-trip-progress-stops li.is-delivered{color:var(--green)}
+.dispatcher-trip-progress-stops li.has-issue{color:var(--red)}

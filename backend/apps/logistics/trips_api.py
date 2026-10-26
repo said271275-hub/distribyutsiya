@@ -58,20 +58,67 @@ class TripStopOutputSerializer(serializers.ModelSerializer):
         source="shop.longitude", max_digits=9, decimal_places=6, read_only=True
     )
     order_ids = serializers.SerializerMethodField()
+    issue_history = serializers.SerializerMethodField()
 
     class Meta:
         model = TripStop
         fields = (
             "id", "shop_id", "shop_name", "district", "latitude", "longitude",
             "sequence", "eta", "eta_window_from", "eta_window_to", "delivered_at",
-            "note", "order_ids",
+            "note", "order_ids", "issue_history",
         )
+
+    def get_issue_history(self, stop) -> list[dict]:
+        issues = getattr(stop, "_issue_history_data", None)
+        if issues is not None:
+            return issues
+        issues = AuditLog.objects.filter(
+            company_id=stop.company_id,
+            action="trip.stop.issue",
+            entity_type="TripStop",
+            entity_id=str(stop.pk),
+        ).order_by("created_at")
+        return [
+            {
+                "reason": (entry.after or {}).get("reason"),
+                "note": (entry.after or {}).get("note", ""),
+                "delivered_orders": (entry.after or {}).get("delivered_orders", []),
+                "created_at": entry.created_at,
+            }
+            for entry in issues
+        ]
 
     def get_order_ids(self, stop) -> list[int]:
         links = getattr(stop, "api_order_links", None)
         if links is None:
             links = stop.order_links.all()
         return [link.order_id for link in links]
+
+
+def attach_trip_stop_issue_history(trips):
+    trips = list(trips)
+    stops = [stop for trip in trips for stop in trip.stops.all()]
+    if not stops:
+        return trips
+    events = AuditLog.objects.filter(
+        company_id__in={stop.company_id for stop in stops},
+        action="trip.stop.issue",
+        entity_type="TripStop",
+        entity_id__in=[str(stop.pk) for stop in stops],
+    ).order_by("created_at")
+    history_by_stop = {}
+    for event in events:
+        history_by_stop.setdefault((event.company_id, event.entity_id), []).append({
+            "reason": (event.after or {}).get("reason"),
+            "note": (event.after or {}).get("note", ""),
+            "delivered_orders": (event.after or {}).get("delivered_orders", []),
+            "created_at": event.created_at,
+        })
+    for stop in stops:
+        stop._issue_history_data = history_by_stop.get(
+            (stop.company_id, str(stop.pk)), []
+        )
+    return trips
 
 
 class TripOutputSerializer(serializers.ModelSerializer):
@@ -99,7 +146,7 @@ class DriverTripOrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ("product_name", "unit", "quantity")
+        fields = ("id", "product_name", "unit", "quantity")
 
 
 class DriverTripOrderSerializer(serializers.ModelSerializer):
@@ -128,14 +175,18 @@ class DriverTripStopSerializer(serializers.ModelSerializer):
         source="shop.longitude", max_digits=9, decimal_places=6, read_only=True
     )
     orders = serializers.SerializerMethodField()
+    issue_history = serializers.SerializerMethodField()
 
     class Meta:
         model = TripStop
         fields = (
             "id", "shop_id", "shop_name", "address", "phone", "district", "latitude",
             "longitude", "sequence", "eta", "eta_window_from", "delivered_at",
-            "eta_window_to", "orders",
+            "eta_window_to", "orders", "issue_history",
         )
+
+    def get_issue_history(self, stop) -> list[dict]:
+        return TripStopOutputSerializer().get_issue_history(stop)
 
     @extend_schema_field(DriverTripOrderSerializer(many=True))
     def get_orders(self, stop) -> list[dict]:
@@ -177,6 +228,38 @@ class DriverTripOutputSerializer(serializers.ModelSerializer):
 
 class DriverTripQuerySerializer(serializers.Serializer):
     date = serializers.DateField(required=False)
+
+
+class DriverStopIssueOrderItemSerializer(serializers.Serializer):
+    item_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+
+
+class DriverStopIssueOrderSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField(min_value=1)
+    items = DriverStopIssueOrderItemSerializer(many=True, min_length=1)
+
+
+class DriverStopIssueSerializer(serializers.Serializer):
+    reason = serializers.ChoiceField(choices=(
+        ("shop_closed", "Do‘kon yopiq"),
+        ("refused", "Qabul qilmadi"),
+        ("partial_delivery", "Qisman yetkazildi"),
+        ("other", "Boshqa sabab"),
+    ))
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    delivered_orders = DriverStopIssueOrderSerializer(many=True, required=False)
+
+    def validate(self, attrs):
+        if attrs["reason"] == "partial_delivery" and not attrs.get("delivered_orders"):
+            raise serializers.ValidationError({
+                "delivered_orders": "Qisman yetkazishda har bir buyurtma miqdorini kiriting."
+            })
+        if attrs["reason"] != "partial_delivery" and attrs.get("delivered_orders"):
+            raise serializers.ValidationError({
+                "delivered_orders": "Yetkazilgan miqdor faqat qisman yetkazishda yuboriladi."
+            })
+        return attrs
 
 
 class StopCreateSerializer(serializers.Serializer):
@@ -717,6 +800,7 @@ class TripAdminViewSet(viewsets.ViewSet):
     def list(self, request):
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(self.get_queryset(), request, view=self)
+        page = attach_trip_stop_issue_history(page)
         return paginator.get_paginated_response(TripOutputSerializer(page, many=True).data)
 
     @extend_schema(request=TripCreateSerializer, responses={201: TripOutputSerializer})
@@ -753,6 +837,7 @@ class TripAdminViewSet(viewsets.ViewSet):
     @extend_schema(responses=TripOutputSerializer)
     def retrieve(self, request, pk=None):
         trip = get_object_or_404(self.get_queryset(), pk=pk)
+        attach_trip_stop_issue_history([trip])
         return Response(TripOutputSerializer(trip).data)
 
     @extend_schema(request=TripUpdateSerializer, responses=TripOutputSerializer)
@@ -1010,6 +1095,7 @@ class DriverTripListView(APIView):
         ).filter(
             date=trip_date
         ).exclude(status=Trip.Status.CANCELLED)
+        trips = attach_trip_stop_issue_history(trips)
         return Response(DriverTripOutputSerializer(trips, many=True).data)
 
 
@@ -1034,6 +1120,7 @@ class DriverStopDeliveredView(APIView):
             result = _trip_queryset(
                 request.user.company, driver=request.user, driver_details=True
             ).get(pk=trip.pk)
+            attach_trip_stop_issue_history([result])
             return Response(DriverTripOutputSerializer(result).data)
         if trip.status not in (Trip.Status.CONFIRMED, Trip.Status.IN_PROGRESS):
             raise ValidationError({"trip": "Faqat tasdiqlangan yoki yo‘ldagi reysda yetkazishni belgilash mumkin."})
@@ -1103,6 +1190,206 @@ class DriverStopDeliveredView(APIView):
         result = _trip_queryset(
             request.user.company, driver=request.user, driver_details=True
         ).get(pk=trip.pk)
+        attach_trip_stop_issue_history([result])
+        return Response(DriverTripOutputSerializer(result).data)
+
+
+class DriverStopIssueView(APIView):
+    permission_classes = (IsAuthenticated, DriverPermission)
+
+    @extend_schema(request=DriverStopIssueSerializer, responses=DriverTripOutputSerializer)
+    @transaction.atomic
+    def post(self, request, trip_id, stop_id):
+        trip = get_object_or_404(
+            Trip.objects.select_for_update().filter(
+                company=request.user.company,
+                driver__user=request.user,
+            ),
+            pk=trip_id,
+        )
+        stop = get_object_or_404(
+            TripStop.objects.select_for_update().filter(trip=trip),
+            pk=stop_id,
+        )
+        if stop.delivered_at:
+            raise ValidationError({"stop": "Yetkazilgan nuqtaga muammo qayd etib bo‘lmaydi."})
+        if trip.status not in (Trip.Status.CONFIRMED, Trip.Status.IN_PROGRESS):
+            raise ValidationError({"trip": "Faqat tasdiqlangan yoki yo‘ldagi reysda muammo qayd etish mumkin."})
+
+        serializer = DriverStopIssueSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        links = list(
+            TripStopOrder.objects.select_for_update()
+            .filter(trip_stop=stop)
+            .select_related("order")
+            .order_by("order_id")
+        )
+        if any(
+            link.order.company_id != trip.company_id
+            or link.order.shop_id != stop.shop_id
+            for link in links
+        ):
+            raise ValidationError({"stop": "Reys nuqtasidagi buyurtma mos emas."})
+        delivered_orders = []
+        if values["reason"] != "partial_delivery":
+            for link in links:
+                order = link.order
+                if order.status == Order.Status.DELIVERED:
+                    continue
+                if order.status not in (
+                    Order.Status.CONFIRMED,
+                    Order.Status.LOADED,
+                    Order.Status.IN_TRANSIT,
+                ):
+                    raise ValidationError({"order": "Reysdagi buyurtma holatini yangilab bo‘lmaydi."})
+                if order.status == Order.Status.CONFIRMED:
+                    transition_order(
+                        order=order,
+                        actor=request.user,
+                        target=Order.Status.LOADED,
+                        reason=f"Muammo qayd etildi: {values['reason']}",
+                    )
+                if order.status in (Order.Status.CONFIRMED, Order.Status.LOADED):
+                    transition_order(
+                        order=order,
+                        actor=request.user,
+                        target=Order.Status.IN_TRANSIT,
+                        reason=f"Muammo qayd etildi: {values['reason']}",
+                    )
+        if values["reason"] == "partial_delivery":
+            orders_by_id = {link.order_id: link.order for link in links}
+            pending_orders = {
+                order_id: order for order_id, order in orders_by_id.items()
+                if order.status != Order.Status.DELIVERED
+            }
+            submitted = values["delivered_orders"]
+            submitted_by_id = {row["order_id"]: row for row in submitted}
+            if len(submitted_by_id) != len(submitted):
+                raise ValidationError({"delivered_orders": "Buyurtmani takror yubormang."})
+            if set(submitted_by_id) != set(pending_orders):
+                raise ValidationError({
+                    "delivered_orders": "Barcha yetkazilmagan buyurtmalarning miqdorini yuboring."
+                })
+
+            has_delivered_quantity = False
+            has_partial_quantity = False
+            for order_id, order in pending_orders.items():
+                if (
+                    order.company_id != trip.company_id
+                    or order.shop_id != stop.shop_id
+                    or order.status not in (
+                        Order.Status.CONFIRMED,
+                        Order.Status.LOADED,
+                        Order.Status.IN_TRANSIT,
+                    )
+                ):
+                    raise ValidationError({"order": "Reysdagi buyurtma yetkazish uchun mos emas."})
+                items = list(order.items.select_for_update().order_by("pk"))
+                quantity_rows = submitted_by_id[order_id]["items"]
+                quantities = {row["item_id"]: row["quantity"] for row in quantity_rows}
+                if len(quantities) != len(quantity_rows):
+                    raise ValidationError({"items": "Buyurtma bandini takror yubormang."})
+                if set(quantities) != {item.pk for item in items}:
+                    raise ValidationError({
+                        "items": "Har bir buyurtma bandi uchun yetkazilgan miqdorni yuboring."
+                    })
+                for item in items:
+                    if quantities[item.pk] > item.quantity:
+                        raise ValidationError({
+                            "items": "Yetkazilgan miqdor buyurtma miqdoridan oshmasligi kerak."
+                        })
+                    if quantities[item.pk] < item.quantity:
+                        has_partial_quantity = True
+                if not any(quantities.values()):
+                    if order.status == Order.Status.CONFIRMED:
+                        transition_order(
+                            order=order,
+                            actor=request.user,
+                            target=Order.Status.LOADED,
+                            reason="Haydovchi yetkazishni boshladi",
+                        )
+                    if order.status in (Order.Status.CONFIRMED, Order.Status.LOADED):
+                        transition_order(
+                            order=order,
+                            actor=request.user,
+                            target=Order.Status.IN_TRANSIT,
+                            reason="Haydovchi yo‘lga chiqdi",
+                        )
+                    continue
+                has_delivered_quantity = True
+                if order.status == Order.Status.CONFIRMED:
+                    transition_order(
+                        order=order,
+                        actor=request.user,
+                        target=Order.Status.LOADED,
+                        reason="Haydovchi yetkazishni boshladi",
+                    )
+                if order.status in (Order.Status.CONFIRMED, Order.Status.LOADED):
+                    transition_order(
+                        order=order,
+                        actor=request.user,
+                        target=Order.Status.IN_TRANSIT,
+                        reason="Haydovchi yo‘lga chiqdi",
+                    )
+                transition_order(
+                    order=order,
+                    actor=request.user,
+                    target=Order.Status.DELIVERED,
+                    reason="Qisman yetkazildi",
+                    delivered_items=[
+                        {"item_id": item.pk, "quantity": quantities[item.pk]}
+                        for item in items
+                    ],
+                )
+                delivered_orders.append({
+                    "order_id": order_id,
+                    "items": [
+                        {"item_id": item.pk, "quantity": str(quantities[item.pk])}
+                        for item in items
+                    ],
+                })
+            if not has_delivered_quantity:
+                raise ValidationError({
+                    "delivered_orders": "Kamida bitta mahsulotdan yetkazilgan miqdor kiriting."
+                })
+            if not has_partial_quantity:
+                raise ValidationError({
+                    "delivered_orders": "Qisman yetkazishda miqdor buyurtma miqdoridan kam bo‘lishi kerak."
+                })
+
+        event = {
+            "reason": values["reason"],
+            "note": values.get("note", "").strip(),
+            "order_ids": [link.order_id for link in links],
+            "delivered_orders": delivered_orders,
+        }
+        AuditLog.objects.create(
+            company=trip.company,
+            actor=request.user,
+            action="trip.stop.issue",
+            entity_type="TripStop",
+            entity_id=str(stop.pk),
+            after=event,
+        )
+        if values["reason"] == "partial_delivery":
+            remaining_orders = TripStopOrder.objects.filter(
+                trip_stop=stop
+            ).exclude(order__status=Order.Status.DELIVERED).exists()
+            if not remaining_orders:
+                stop.delivered_at = timezone.now()
+                stop.save(update_fields=("delivered_at", "updated_at"))
+        remaining_stops = TripStop.objects.filter(
+            trip=trip, delivered_at__isnull=True
+        ).exists()
+        trip.status = (
+            Trip.Status.IN_PROGRESS if remaining_stops else Trip.Status.COMPLETED
+        )
+        trip.save(update_fields=("status", "updated_at"))
+        result = _trip_queryset(
+            request.user.company, driver=request.user, driver_details=True
+        ).get(pk=trip.pk)
+        attach_trip_stop_issue_history([result])
         return Response(DriverTripOutputSerializer(result).data)
 
 

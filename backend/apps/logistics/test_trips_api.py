@@ -794,6 +794,229 @@ class TripApiTests(TestCase):
         self.assertEqual(dispatcher_trip.data["status"], Trip.Status.COMPLETED)
         self.assertIsNotNone(dispatcher_trip.data["stops"][0]["delivered_at"])
 
+    def test_driver_issue_is_scoped_to_own_trip_and_stop(self):
+        own_trip = self.create_trip()
+        own_order = self.make_order()
+        self.add_stop(own_trip, self.shop, [own_order.pk])
+        self.client.post(
+            f"/api/v1/admin/trips/{own_trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+        another_driver_user = User.objects.create_user(
+            phone="+998901110026",
+            company=self.company,
+            role=User.Role.DRIVER,
+        )
+        another_driver = DriverProfile.objects.create(
+            company=self.company, user=another_driver_user
+        )
+        another_trip = Trip.objects.create(
+            company=self.company,
+            date=date.today(),
+            vehicle=self.vehicle,
+            driver=another_driver,
+            status=Trip.Status.CONFIRMED,
+        )
+        foreign_stop = TripStop.objects.create(
+            company=self.company,
+            trip=another_trip,
+            shop=self.nearby_shop,
+            sequence=1,
+        )
+        foreign_company_trip = Trip.objects.create(
+            company=self.other_company,
+            date=date.today(),
+            vehicle=self.other_vehicle,
+            driver=self.other_driver,
+            status=Trip.Status.CONFIRMED,
+        )
+        foreign_company_stop = TripStop.objects.create(
+            company=self.other_company,
+            trip=foreign_company_trip,
+            shop=self.other_shop,
+            sequence=1,
+        )
+        own_stop = own_trip.stops.get()
+        self.client.force_authenticate(self.driver_user)
+
+        paths = (
+            f"/api/v1/driver/trips/{own_trip.pk}/stops/{foreign_stop.pk}/issue/",
+            f"/api/v1/driver/trips/{another_trip.pk}/stops/{foreign_stop.pk}/issue/",
+            f"/api/v1/driver/trips/{foreign_company_trip.pk}/stops/{foreign_company_stop.pk}/issue/",
+        )
+        for path in paths:
+            response = self.client.post(
+                path, {"reason": "shop_closed"}, format="json"
+            )
+            self.assertEqual(response.status_code, 404, response.data)
+        self.assertFalse(AuditLog.objects.filter(action="trip.stop.issue").exists())
+        own_stop.refresh_from_db()
+        self.assertIsNone(own_stop.delivered_at)
+
+    def test_driver_issue_requires_reason_and_preserves_history_for_dispatcher_and_shop(self):
+        order = self.make_order()
+        trip = self.create_trip()
+        self.add_stop(trip, self.shop, [order.pk])
+        self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+        stop = trip.stops.get()
+        self.client.force_authenticate(self.driver_user)
+        issue_url = f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/issue/"
+        missing_reason = self.client.post(issue_url, {"note": "Izoh"}, format="json")
+        self.assertEqual(missing_reason.status_code, 400)
+
+        for reason, note in (
+            ("shop_closed", "Eshik yopiq edi"),
+            ("refused", "Qabul qilishmadi"),
+        ):
+            response = self.client.post(
+                issue_url,
+                {"reason": reason, "note": note},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertIsNone(response.data["stops"][0]["delivered_at"])
+            self.assertEqual(
+                response.data["stops"][0]["issue_history"][-1]["reason"],
+                reason,
+            )
+
+        self.assertEqual(
+            AuditLog.objects.filter(
+                action="trip.stop.issue",
+                entity_type="TripStop",
+                entity_id=str(stop.pk),
+            ).count(),
+            2,
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.IN_TRANSIT)
+        self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
+
+        self.client.force_authenticate(self.admin)
+        dispatcher = self.client.get("/api/v1/admin/trips/")
+        self.assertEqual(dispatcher.status_code, 200, dispatcher.data)
+        dispatcher_stop = dispatcher.data["results"][0]["stops"][0]
+        self.assertEqual(len(dispatcher_stop["issue_history"]), 2)
+        self.assertEqual(dispatcher_stop["issue_history"][-1]["reason"], "refused")
+
+        self.client.force_authenticate(self.shop.owner)
+        shop_order = self.client.get(f"/api/v1/orders/{order.pk}/")
+        self.assertEqual(shop_order.status_code, 200, shop_order.data)
+        self.assertEqual(len(shop_order.data["delivery_issue_history"]), 2)
+        self.assertEqual(shop_order.data["delivery_issue_history"][0]["reason"], "shop_closed")
+        self.assertEqual(shop_order.data["driver_phone"], self.driver_user.phone)
+
+    def test_partial_delivery_records_entered_quantity_and_uses_existing_ledger_rule(self):
+        order = self.make_order(quantity="2.00")
+        untouched_order = self.make_order(quantity="1.00")
+        trip = self.create_trip()
+        self.add_stop(trip, self.shop, [order.pk, untouched_order.pk])
+        confirmed = self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+        self.assertEqual(confirmed.status_code, 200, confirmed.data)
+        stop = trip.stops.get()
+        item = order.items.get()
+        self.client.force_authenticate(self.driver_user)
+        issue_url = f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/issue/"
+
+        missing_quantities = self.client.post(
+            issue_url,
+            {"reason": "partial_delivery"},
+            format="json",
+        )
+        self.assertEqual(missing_quantities.status_code, 400)
+        self.assertFalse(AuditLog.objects.filter(action="trip.stop.issue").exists())
+        for quantity in ("2.01", "2.00"):
+            invalid_quantity = self.client.post(
+                issue_url,
+                {
+                    "reason": "partial_delivery",
+                    "delivered_orders": [{
+                        "order_id": order.pk,
+                        "items": [{"item_id": item.pk, "quantity": quantity}],
+                    }, {
+                        "order_id": untouched_order.pk,
+                        "items": [{
+                            "item_id": untouched_order.items.get().pk,
+                            "quantity": "1.00",
+                        }],
+                    }],
+                },
+                format="json",
+            )
+            self.assertEqual(invalid_quantity.status_code, 400, invalid_quantity.data)
+            self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
+        self.assertFalse(AuditLog.objects.filter(action="trip.stop.issue").exists())
+
+        response = self.client.post(
+            issue_url,
+            {
+                "reason": "partial_delivery",
+                "note": "Bir qismi qabul qilindi",
+                "delivered_orders": [{
+                    "order_id": order.pk,
+                    "items": [{"item_id": item.pk, "quantity": "1.25"}],
+                }, {
+                    "order_id": untouched_order.pk,
+                    "items": [{
+                        "item_id": untouched_order.items.get().pk,
+                        "quantity": "0.00",
+                    }],
+                }],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        order.refresh_from_db()
+        item.refresh_from_db()
+        untouched_order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.DELIVERED)
+        self.assertEqual(item.delivered_quantity, Decimal("1.25"))
+        self.assertEqual(untouched_order.status, Order.Status.IN_TRANSIT)
+        entry = BalanceEntry.objects.get(order=order)
+        self.assertEqual(entry.amount, Decimal("1250.00"))
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("1250.00"),
+        )
+        self.assertFalse(BalanceEntry.objects.filter(order=untouched_order).exists())
+        self.assertIsNone(response.data["stops"][0]["delivered_at"])
+        issue = response.data["stops"][0]["issue_history"][0]
+        self.assertEqual(issue["reason"], "partial_delivery")
+        self.assertEqual(
+            issue["delivered_orders"][0]["items"][0]["quantity"],
+            "1.25",
+        )
+
+        self.client.force_authenticate(self.shop.owner)
+        shop_order = self.client.get(f"/api/v1/orders/{order.pk}/")
+        self.assertEqual(shop_order.status_code, 200, shop_order.data)
+        self.assertEqual(shop_order.data["status"], Order.Status.DELIVERED)
+        self.assertEqual(shop_order.data["driver_phone"], self.driver_user.phone)
+        self.assertEqual(
+            shop_order.data["delivery_issue_history"][0]["delivered_items"][0]["quantity"],
+            "1.25",
+        )
+        self.client.force_authenticate(self.driver_user)
+        completed = self.client.post(
+            f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/delivered/",
+            {},
+            format="json",
+        )
+        self.assertEqual(completed.status_code, 200, completed.data)
+        self.assertEqual(completed.data["status"], Trip.Status.COMPLETED)
+        untouched_order.refresh_from_db()
+        self.assertEqual(untouched_order.status, Order.Status.DELIVERED)
+        self.assertEqual(BalanceEntry.objects.filter(order=untouched_order).get().amount, Decimal("1000.00"))
+
     def test_manual_route_order_eta_and_external_osrm_failure_fallback(self):
         self.assertEqual(
             nearest_neighbor_order(
@@ -929,5 +1152,6 @@ class TripApiTests(TestCase):
             "/api/v1/admin/route-settings/",
             "/api/v1/driver/trips/",
             "/api/v1/driver/trips/{trip_id}/stops/{stop_id}/delivered/",
+            "/api/v1/driver/trips/{trip_id}/stops/{stop_id}/issue/",
         ):
             self.assertIn(path.encode(), response.content)

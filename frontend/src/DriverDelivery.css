@@ -8,3 +8,20 @@
 .driver-mark-delivered{display:flex;min-height:46px;align-items:center;justify-content:center;gap:8px;padding:0 13px;border:0;border-radius:9px;color:#fff;background:var(--green);font:inherit;font-size:12px;font-weight:750}
 .driver-mark-delivered:disabled{cursor:not-allowed;opacity:.55}
 .driver-delivery-error{margin:0 0 12px;padding:10px;border-radius:8px;color:var(--red);background:color-mix(in srgb,var(--red) 9%,var(--surface));font-size:11px}
+.driver-report-issue{min-height:43px;padding:0 12px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--surface);font:inherit;font-size:11px;font-weight:700}
+.driver-report-issue:disabled{cursor:not-allowed;opacity:.55}
+.driver-issue-form{display:grid;gap:11px;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--canvas)}
+.driver-issue-form>label{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:700}
+.driver-issue-form select,.driver-issue-form textarea,.driver-issue-quantities input{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;color:var(--ink);background:var(--surface);font:inherit;font-size:12px}
+.driver-issue-form textarea{min-height:70px;resize:vertical}
+.driver-issue-quantities{display:grid;gap:8px}
+.driver-issue-quantities>strong{font-size:11px}
+.driver-issue-quantities fieldset{display:grid;gap:7px;margin:0;padding:9px;border:1px solid var(--line);border-radius:7px}
+.driver-issue-quantities legend{padding:0 4px;font-size:10px;font-weight:700}
+.driver-issue-quantities label{display:grid;grid-template-columns:minmax(0,1fr) 94px;align-items:center;gap:8px;color:var(--muted);font-size:10px}
+.driver-issue-quantities input{min-height:36px}
+.driver-issue-actions{display:flex;justify-content:flex-end;gap:8px}
+.driver-issue-cancel{min-height:42px;padding:0 12px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--surface);font:inherit;font-size:11px}
+.driver-issue-history-entry{display:grid;gap:3px;padding:8px 10px;border-left:3px solid var(--red);border-radius:5px;background:color-mix(in srgb,var(--red) 7%,var(--surface))}
+.driver-issue-history-entry strong{font-size:10px}
+.driver-issue-history-entry small,.driver-issue-history-entry p{margin:0;color:var(--muted);font-size:9px}

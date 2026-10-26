@@ -16,7 +16,12 @@ type DriverOrder = {
   id: number
   status: string
   total_price: string
-  items: Array<{ product_name: string; unit: string; quantity: string }>
+  items: Array<{ id: number; product_name: string; unit: string; quantity: string }>
+}
+type DriverIssue = {
+  reason: DriverIssueReason
+  note: string
+  created_at: string
 }
 type DriverStop = Omit<MapStop, 'order_ids'> & {
   id: number
@@ -24,6 +29,7 @@ type DriverStop = Omit<MapStop, 'order_ids'> & {
   address: string
   phone: string
   orders: DriverOrder[]
+  issue_history: DriverIssue[]
 }
 type DriverTrip = {
   id: number
@@ -33,6 +39,14 @@ type DriverTrip = {
   status: string
   stops: DriverStop[]
   picking_list: Array<{ product_name: string; unit: string; quantity: string }>
+}
+type DriverIssueReason = 'shop_closed' | 'refused' | 'partial_delivery' | 'other'
+
+const driverIssueLabels: Record<DriverIssueReason, string> = {
+  shop_closed: 'Do‘kon yopiq',
+  refused: 'Qabul qilmadi',
+  partial_delivery: 'Qisman yetkazildi',
+  other: 'Boshqa sabab',
 }
 
 function localDate() {
@@ -64,6 +78,10 @@ function tripStatusLabel(status: string) {
   return 'Rejalashtirilgan'
 }
 
+function formatIssueReason(reason: string) {
+  return driverIssueLabels[reason as DriverIssueReason] ?? reason
+}
+
 function unitLabel(unit: string) {
   const labels: Record<string, string> = { piece: 'dona', box: 'quti', block: 'blok' }
   return labels[unit] ?? unit
@@ -76,6 +94,10 @@ export default function DriverPanel() {
   const [date, setDate] = useState(localDate)
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null)
   const [logoutError, setLogoutError] = useState('')
+  const [issueStopId, setIssueStopId] = useState<number | null>(null)
+  const [issueReason, setIssueReason] = useState<DriverIssueReason | ''>('')
+  const [issueNote, setIssueNote] = useState('')
+  const [issueQuantities, setIssueQuantities] = useState<Record<number, string>>({})
   const tripsQuery = useQuery({
     queryKey: ['driver-trips', date],
     queryFn: async () => (
@@ -93,6 +115,43 @@ export default function DriverPanel() {
       queryClient.setQueryData<DriverTrip[]>(['driver-trips', date], (current) => (
         current?.map((trip) => trip.id === updatedTrip.id ? updatedTrip : trip)
       ))
+      await queryClient.invalidateQueries({ queryKey: ['driver-trips', date] })
+    },
+  })
+  const issueMutation = useMutation({
+    mutationFn: async ({
+      tripId,
+      stopId,
+      reason,
+      note,
+      deliveredOrders,
+    }: {
+      tripId: number
+      stopId: number
+      reason: DriverIssueReason
+      note: string
+      deliveredOrders?: Array<{
+        order_id: number
+        items: Array<{ item_id: number; quantity: string }>
+      }>
+    }) => (
+      await api.post<DriverTrip>(
+        `/v1/driver/trips/${tripId}/stops/${stopId}/issue/`,
+        {
+          reason,
+          note,
+          ...(deliveredOrders ? { delivered_orders: deliveredOrders } : {}),
+        },
+      )
+    ).data,
+    onSuccess: async (updatedTrip) => {
+      queryClient.setQueryData<DriverTrip[]>(['driver-trips', date], (current) => (
+        current?.map((trip) => trip.id === updatedTrip.id ? updatedTrip : trip)
+      ))
+      setIssueStopId(null)
+      setIssueReason('')
+      setIssueNote('')
+      setIssueQuantities({})
       await queryClient.invalidateQueries({ queryKey: ['driver-trips', date] })
     },
   })
@@ -204,6 +263,11 @@ export default function DriverPanel() {
                       {apiErrorMessage(deliveryMutation.error, 'Yetkazilgan holatini saqlab bo‘lmadi.')}
                     </p>
                   )}
+                  {issueMutation.isError && (
+                    <p className="driver-delivery-error" role="alert">
+                      {apiErrorMessage(issueMutation.error, 'Muammo qaydini saqlab bo‘lmadi.')}
+                    </p>
+                  )}
                   {selectedTrip.stops.length ? (
                     <ol className="driver-stop-list">
                       {orderedStops.map((stop, index) => (
@@ -221,6 +285,13 @@ export default function DriverPanel() {
                                   <ul>{order.items.map((item, itemIndex) => <li key={`${order.id}-${itemIndex}`}>{item.product_name} — {item.quantity} {unitLabel(item.unit)}</li>)}</ul>
                                 </div>
                               )) : <span className="driver-muted">Buyurtma biriktirilmagan</span>}
+                              {stop.issue_history.map((issue, issueIndex) => (
+                                <div className="driver-issue-history-entry" key={`${issue.created_at}-${issueIndex}`}>
+                                  <strong>{formatIssueReason(issue.reason)}</strong>
+                                  <small>{formatDeliveredAt(issue.created_at)}</small>
+                                  {issue.note && <p>{issue.note}</p>}
+                                </div>
+                              ))}
                             </div>
                             {stop.delivered_at ? (
                               <div className="driver-stop-delivered" role="status">
@@ -228,23 +299,139 @@ export default function DriverPanel() {
                                 Yetkazildi · {formatDeliveredAt(stop.delivered_at)}
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                className="driver-mark-delivered"
-                                disabled={
-                                  deliveryMutation.isPending
-                                  || !['confirmed', 'in_progress'].includes(selectedTrip.status)
-                                }
-                                onClick={() => {
-                                  if (!window.confirm(
-                                    `${stop.shop_name} do‘koni${stop.orders.length ? `dagi ${stop.orders.length} ta buyurtma` : ''} yetkazilgan deb belgilansinmi?`,
-                                  )) return
-                                  deliveryMutation.reset()
-                                  deliveryMutation.mutate({ tripId: selectedTrip.id, stopId: stop.id })
-                                }}
-                              >
-                                <Check size={17} /> Yetkazildi deb belgilash
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="driver-mark-delivered"
+                                  disabled={
+                                    deliveryMutation.isPending
+                                    || issueMutation.isPending
+                                    || !['confirmed', 'in_progress'].includes(selectedTrip.status)
+                                  }
+                                  onClick={() => {
+                                    if (!window.confirm(
+                                      `${stop.shop_name} do‘koni${stop.orders.length ? `dagi ${stop.orders.length} ta buyurtma` : ''} yetkazilgan deb belgilansinmi?`,
+                                    )) return
+                                    deliveryMutation.reset()
+                                    deliveryMutation.mutate({ tripId: selectedTrip.id, stopId: stop.id })
+                                  }}
+                                >
+                                  <Check size={17} /> Yetkazildi deb belgilash
+                                </button>
+                                {issueStopId === stop.id ? (
+                                  <form
+                                    className="driver-issue-form"
+                                    onSubmit={(event) => {
+                                      event.preventDefault()
+                                      if (!issueReason) return
+                                      const pendingOrders = stop.orders.filter(
+                                        (order) => order.status !== 'delivered',
+                                      )
+                                      const deliveredOrders = issueReason === 'partial_delivery'
+                                        ? pendingOrders.map((order) => ({
+                                          order_id: order.id,
+                                          items: order.items.map((item) => ({
+                                            item_id: item.id,
+                                            quantity: issueQuantities[item.id] ?? '',
+                                          })),
+                                        }))
+                                        : undefined
+                                      issueMutation.reset()
+                                      issueMutation.mutate({
+                                        tripId: selectedTrip.id,
+                                        stopId: stop.id,
+                                        reason: issueReason,
+                                        note: issueNote,
+                                        deliveredOrders,
+                                      })
+                                    }}
+                                  >
+                                    <label>
+                                      <span>Muammo sababi</span>
+                                      <select
+                                        required
+                                        value={issueReason}
+                                        onChange={(event) => setIssueReason(event.target.value as DriverIssueReason | '')}
+                                      >
+                                        <option value="">Sababni tanlang</option>
+                                        {Object.entries(driverIssueLabels).map(([value, label]) => (
+                                          <option key={value} value={value}>{label}</option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    {issueReason === 'partial_delivery' && (
+                                      <div className="driver-issue-quantities">
+                                        <strong>Yetkazilgan miqdor</strong>
+                                        {stop.orders.filter((order) => order.status !== 'delivered').map((order) => (
+                                          <fieldset key={order.id}>
+                                            <legend>Buyurtma #{order.id}</legend>
+                                            {order.items.map((item) => (
+                                              <label key={item.id}>
+                                                <span>{item.product_name} · {item.quantity} {unitLabel(item.unit)}</span>
+                                                <input
+                                                  required
+                                                  type="number"
+                                                  min="0"
+                                                  max={item.quantity}
+                                                  step="0.01"
+                                                  value={issueQuantities[item.id] ?? ''}
+                                                  onChange={(event) => setIssueQuantities((current) => ({
+                                                    ...current,
+                                                    [item.id]: event.target.value,
+                                                  }))}
+                                                />
+                                              </label>
+                                            ))}
+                                          </fieldset>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <label>
+                                      <span>Qo‘shimcha izoh (ixtiyoriy)</span>
+                                      <textarea
+                                        maxLength={500}
+                                        value={issueNote}
+                                        onChange={(event) => setIssueNote(event.target.value)}
+                                      />
+                                    </label>
+                                    <div className="driver-issue-actions">
+                                      <button
+                                        type="button"
+                                        className="driver-issue-cancel"
+                                        onClick={() => setIssueStopId(null)}
+                                      >
+                                        Bekor qilish
+                                      </button>
+                                      <button
+                                        type="submit"
+                                        className="driver-mark-delivered"
+                                        disabled={issueMutation.isPending || !issueReason}
+                                      >
+                                        {issueMutation.isPending ? 'Saqlanmoqda…' : 'Muammoni qayd etish'}
+                                      </button>
+                                    </div>
+                                  </form>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="driver-report-issue"
+                                    disabled={
+                                      deliveryMutation.isPending
+                                      || issueMutation.isPending
+                                      || !['confirmed', 'in_progress'].includes(selectedTrip.status)
+                                    }
+                                    onClick={() => {
+                                      setIssueStopId(stop.id)
+                                      setIssueReason('')
+                                      setIssueNote('')
+                                      setIssueQuantities({})
+                                      issueMutation.reset()
+                                    }}
+                                  >
+                                    Do‘kondagi muammoni qayd etish
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </li>

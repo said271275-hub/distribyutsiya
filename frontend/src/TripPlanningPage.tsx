@@ -66,6 +66,11 @@ type TripProposal = {
 type TripStop = MapStop & {
   id: number
   delivered_at: string | null
+  issue_history: Array<{
+    reason: string
+    note: string
+    created_at: string
+  }>
 }
 type SuggestionResponse = {
   date: string
@@ -98,6 +103,16 @@ function formatTripDeliveryTime(value: string) {
     timeStyle: 'short',
     timeZone: 'Asia/Tashkent',
   }).format(new Date(value))
+}
+
+function tripIssueLabel(reason: string) {
+  const labels: Record<string, string> = {
+    shop_closed: 'Do‘kon yopiq',
+    refused: 'Qabul qilmadi',
+    partial_delivery: 'Qisman yetkazildi',
+    other: 'Boshqa sabab',
+  }
+  return labels[reason] ?? reason
 }
 
 const activeTripStatuses = new Set(['planned', 'confirmed', 'in_progress'])
@@ -441,15 +456,34 @@ export default function TripPlanningPage() {
                     <span style={{ width: `${percentage}%` }} />
                   </div>
                   <ul className="dispatcher-trip-progress-stops">
-                    {trip.stops.map((stop) => (
-                      <li key={stop.id} className={stop.delivered_at ? 'is-delivered' : ''}>
+                    {trip.stops.map((stop) => {
+                      const latestIssue = stop.issue_history.at(-1)
+                      return (
+                      <li
+                        key={stop.id}
+                        className={[
+                          stop.delivered_at ? 'is-delivered' : '',
+                          stop.issue_history.length ? 'has-issue' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
                         <span>{stop.shop_name}</span>
                         <span>
-                          <strong>{stop.delivered_at ? 'Yetkazildi' : 'Kutilmoqda'}</strong>
+                          <strong>
+                            {latestIssue
+                              ? `Muammo: ${tripIssueLabel(latestIssue.reason)}`
+                              : stop.delivered_at ? 'Yetkazildi' : 'Kutilmoqda'}
+                          </strong>
                           {stop.delivered_at && <small>{formatTripDeliveryTime(stop.delivered_at)}</small>}
+                          {latestIssue && (
+                            <>
+                              <small>{formatTripDeliveryTime(latestIssue.created_at)}</small>
+                              {latestIssue.note && <small>{latestIssue.note}</small>}
+                            </>
+                          )}
                         </span>
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                 </article>
               )
