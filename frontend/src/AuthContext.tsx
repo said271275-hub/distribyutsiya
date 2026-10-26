@@ -11,6 +11,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const clearDriverShellCache = useCallback(() => {
+    if (!('serviceWorker' in navigator)) return
+    const controller = navigator.serviceWorker.controller
+    if (controller) {
+      controller.postMessage({ type: 'CLEAR_DRIVER_APP_CACHE' })
+    } else {
+      void navigator.serviceWorker.getRegistration().then((registration) => {
+        registration?.active?.postMessage({ type: 'CLEAR_DRIVER_APP_CACHE' })
+      })
+    }
+  }, [])
+
   useEffect(() => {
     const onExpired = () => clearAuth()
     window.addEventListener('auth:expired', onExpired)
@@ -48,9 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.post('/auth/logout/')
     } finally {
+      clearDriverShellCache()
       clearAuth()
     }
-  }, [clearAuth])
+  }, [clearAuth, clearDriverShellCache])
 
   const value = useMemo(
     () => ({ user, loading, login, restore, logout, completeDeletion: clearAuth }),

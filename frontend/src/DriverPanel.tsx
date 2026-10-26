@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, Check, CheckCircle2, LogOut, MapPin, Phone, Truck } from 'lucide-react'
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api, { apiErrorMessage } from './api'
 import type { MapStop } from './DispatcherMap'
@@ -9,8 +9,14 @@ import { useAuth } from './useAuth'
 import './DispatcherPlanning.css'
 import './DriverPanel.css'
 import './DriverDelivery.css'
+import './DriverPwa.css'
 
 const DriverRouteMap = lazy(() => import('./DispatcherMap'))
+
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
 
 type DriverOrder = {
   id: number
@@ -94,6 +100,8 @@ export default function DriverPanel() {
   const [date, setDate] = useState(localDate)
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null)
   const [logoutError, setLogoutError] = useState('')
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
+  const [isInstalled, setIsInstalled] = useState(false)
   const [issueStopId, setIssueStopId] = useState<number | null>(null)
   const [issueReason, setIssueReason] = useState<DriverIssueReason | ''>('')
   const [issueNote, setIssueNote] = useState('')
@@ -167,6 +175,46 @@ export default function DriverPanel() {
     [selectedTrip],
   )
 
+  useEffect(() => {
+    const onInstallPrompt = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as InstallPromptEvent)
+    }
+    const onInstalled = () => {
+      setInstallPrompt(null)
+      setIsInstalled(true)
+    }
+    window.addEventListener('beforeinstallprompt', onInstallPrompt)
+    window.addEventListener('appinstalled', onInstalled)
+
+    const manifestLink = document.createElement('link')
+    manifestLink.rel = 'manifest'
+    manifestLink.href = '/manifest.webmanifest'
+    document.head.append(manifestLink)
+    const themeColor = document.querySelector('meta[name="theme-color"]')
+    const previousThemeColor = themeColor?.getAttribute('content')
+    themeColor?.setAttribute('content', '#087f5b')
+
+    if (window.matchMedia('(display-mode: standalone)').matches) setIsInstalled(true)
+    if ('serviceWorker' in navigator) {
+      void navigator.serviceWorker.register('/sw.js', { scope: '/driver' }).catch(() => undefined)
+    }
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onInstallPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+      manifestLink.remove()
+      if (previousThemeColor) themeColor?.setAttribute('content', previousThemeColor)
+    }
+  }, [])
+
+  const installApp = async () => {
+    if (!installPrompt) return
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    if (choice.outcome === 'accepted') setIsInstalled(true)
+    setInstallPrompt(null)
+  }
+
   const signOut = async () => {
     setLogoutError('')
     try {
@@ -190,6 +238,18 @@ export default function DriverPanel() {
       </header>
 
       <div className="driver-content">
+        {!isInstalled && (
+          <aside className="driver-pwa-install">
+            <div><strong>Haydovchi ilovasini o‘rnating</strong><span>Reyslaringizni telefon ekranidan tez oching.</span></div>
+            {installPrompt ? (
+              <button type="button" onClick={() => void installApp()}>O‘rnatish</button>
+            ) : (
+              <span className="driver-pwa-hint">{ /iPhone|iPad|iPod/i.test(navigator.userAgent)
+                ? 'Ulashish menyusi → Bosh ekranga qo‘shish'
+                : 'Brauzer menyusi → Bosh ekranga qo‘shish'}</span>
+            )}
+          </aside>
+        )}
         <div className="driver-heading">
           <div><span className="driver-eyebrow">BUGUNGI ISH REJASI</span><h1>Mening reysim</h1></div>
           <label className="driver-date">
