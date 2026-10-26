@@ -33,13 +33,18 @@ export function filterFinanceBalances(
 }
 
 export function financeEntryLabel(entry: FinanceEntry) {
-  if (entry.order_id !== null) return 'Buyurtma qarzi'
-  if (entry.payment_id !== null) return 'To‘lov'
-  return 'Tuzatish'
+  return entry.direction === 'debit' ? 'Qarz qo‘shildi' : 'Qarz kamaydi'
 }
 
 export function formatFinanceMoney(value: string | number) {
   return `${new Intl.NumberFormat('uz-UZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value))} so‘m`
+}
+
+export function formatFinanceBalance(value: string | number) {
+  const balance = Number(value)
+  if (balance > 0) return `Do‘kon qarzdor: ${formatFinanceMoney(balance)}`
+  if (balance < 0) return `Oldindan to‘langan: ${formatFinanceMoney(Math.abs(balance))}`
+  return 'Qarz yo‘q'
 }
 
 export function formatFinanceDate(value: string | null) {
@@ -49,5 +54,7 @@ export function formatFinanceDate(value: string | null) {
     ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
     : new Date(value)
   if (Number.isNaN(date.getTime())) return 'Sana noto‘g‘ri'
-  return new Intl.DateTimeFormat('uz-UZ', { year: 'numeric', month: 'short', day: 'numeric' }).format(date)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${day}.${month}.${date.getFullYear()}`
 }

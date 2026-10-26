@@ -8,6 +8,7 @@ import api, { apiErrorMessage } from './api'
 import {
   filterFinanceBalances,
   financeEntryLabel,
+  formatFinanceBalance,
   formatFinanceDate,
   formatFinanceMoney,
   type FinanceBalance,
@@ -164,7 +165,7 @@ export default function DispatcherFinancePage() {
                       <strong>{balance.shop_name}</strong>
                       <small>Oxirgi to‘lov: {formatFinanceDate(balance.last_payment_at)}</small>
                     </span>
-                    <b>{formatFinanceMoney(balance.current_balance)}</b>
+                    <b>{formatFinanceBalance(balance.current_balance)}</b>
                   </button>
                 ))}
                 {!visibleBalances.length && (
@@ -180,7 +181,7 @@ export default function DispatcherFinancePage() {
                   <div className="dispatcher-finance-detail-heading">
                     <div><span className="dispatcher-eyebrow">DO‘KON HISOBI</span><h2>{selectedBalance.shop_name}</h2></div>
                     <div className="dispatcher-finance-balances">
-                      <span><small>Joriy qarz saldosi</small><strong>{formatFinanceMoney(selectedBalance.current_balance)}</strong></span>
+                      <span><small>Saldo holati</small><strong>{formatFinanceBalance(selectedBalance.current_balance)}</strong></span>
                       <span><small>Tara depoziti</small><strong>{formatFinanceMoney(selectedBalance.container_deposit)}</strong></span>
                     </div>
                   </div>
@@ -192,7 +193,7 @@ export default function DispatcherFinancePage() {
                     {selectedBalance.entries.length ? (
                       <div className="dispatcher-table-scroll">
                         <table className="dispatcher-orders-table">
-                          <thead><tr><th>Sana</th><th>Yozuv</th><th>Izoh</th><th>Summa</th></tr></thead>
+                          <thead><tr><th>Sana</th><th>Qarz o‘zgarishi</th><th>Izoh</th><th>Qarzga ta’siri</th></tr></thead>
                           <tbody>
                             {selectedBalance.entries.map((entry) => (
                               <tr key={entry.id}>

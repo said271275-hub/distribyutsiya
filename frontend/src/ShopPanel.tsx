@@ -27,7 +27,12 @@ import { Controller, useForm } from 'react-hook-form'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { z } from 'zod'
 import api, { apiErrorMessage } from './api'
-import { financeEntryLabel, formatFinanceDate, formatFinanceMoney } from './dispatcherFinanceUtils'
+import {
+  financeEntryLabel,
+  formatFinanceBalance,
+  formatFinanceDate,
+  formatFinanceMoney,
+} from './dispatcherFinanceUtils'
 import { useAuth } from './useAuth'
 import { ru } from './i18n/ru'
 import './ShopPanel.css'
@@ -688,14 +693,14 @@ function FinancePage({ t }: { t: Copy }) {
   ) ?? 0
   return <><PageHeading eyebrow="HISOB-KITOB" title={t('finance')} description="Qarz balansi va qayd etilgan to‘lovlar." />
     {query.isLoading ? <LoadingRows /> : query.isError ? <ErrorState message="Hisob-kitobni yuklab bo‘lmadi" onRetry={() => void query.refetch()} t={t} /> : <>
-      <section className="shop-balance-panel"><span><Wallet size={19} />{t('balance')}</span><strong>{money(query.data?.balance ?? 0)}</strong><small>{query.data?.balances.map((item) => `${item.company_name}: ${money(item.balance)}`).join(' · ')}</small><small>Tara depoziti alohida: {money(containerDeposit)}</small></section>
+      <section className="shop-balance-panel"><span><Wallet size={19} />Jami saldo</span><strong>{formatFinanceBalance(query.data?.balance ?? 0)}</strong><small>{query.data?.balances.map((item) => `${item.company_name}: ${formatFinanceBalance(item.balance)}`).join(' · ')}</small><small>Tara depoziti alohida: {money(containerDeposit)}</small></section>
       <section className="shop-finance-history"><div className="shop-section-head"><div><span className="shop-eyebrow">TO‘LOVLAR</span><h2>{t('paymentHistory')}</h2></div><CreditCard size={20} /></div>
-        {!query.data?.payments.length ? <div className="shop-inline-empty">{t('noPayments')}</div> : query.data.payments.map((payment) => <article className="shop-payment-row" key={payment.id}><span className="shop-payment-icon"><CreditCard size={18} /></span><div><strong>{payment.company_name}</strong><small>{payment.paid_at ? new Date(payment.paid_at).toLocaleDateString('uz-UZ') : new Date(payment.created_at).toLocaleDateString('uz-UZ')} · {payment.method}</small></div><b>{money(payment.amount)}</b></article>)}
+        {!query.data?.payments.length ? <div className="shop-inline-empty">{t('noPayments')}</div> : query.data.payments.map((payment) => <article className="shop-payment-row" key={payment.id}><span className="shop-payment-icon"><CreditCard size={18} /></span><div><strong>{payment.company_name}</strong><small>{formatFinanceDate(payment.paid_at ?? payment.created_at)} · {payment.method}</small></div><b>{money(payment.amount)}</b></article>)}
       </section>
       <section className="shop-finance-history"><div className="shop-section-head"><div><span className="shop-eyebrow">BALANS YOZUVLARI</span><h2>Hisob-kitob tarixi</h2></div><Wallet size={20} /></div>
         {!query.data?.entries.length ? <div className="shop-inline-empty">Hozircha hisob-kitob yozuvi yo‘q</div> : query.data.entries.map((entry) => {
           const company = query.data?.balances.find((item) => item.company_id === entry.company_id)
-          return <article className="shop-payment-row" key={entry.id}><span className="shop-payment-icon"><CreditCard size={18} /></span><div><strong>{company?.company_name ?? 'Kompaniya'} · {financeEntryLabel(entry)}</strong><small>{formatFinanceDate(entry.posted_at ?? entry.created_at)} · {entry.note || 'Izohsiz'}</small></div><b>{entry.direction === 'debit' ? '+' : '−'}{formatFinanceMoney(entry.amount)}</b></article>
+          return <article className="shop-payment-row" key={entry.id}><span className="shop-payment-icon"><CreditCard size={18} /></span><div><strong>{company?.company_name ?? 'Kompaniya'} · {financeEntryLabel(entry)}</strong><small>{formatFinanceDate(entry.posted_at ?? entry.created_at)} · {entry.note || 'Izohsiz'}</small></div><b className={`shop-finance-entry-${entry.direction}`}>{entry.direction === 'debit' ? '+' : '−'}{formatFinanceMoney(entry.amount)}</b></article>
         })}
       </section>
     </>}

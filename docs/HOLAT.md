@@ -23,8 +23,7 @@
 
 ## Ochiq qarorlar
 
-- Buyurtma tasdiqlanganda qarzga yozish hozirgi tizimda qo‘llanadi. Egasi bu qoida va qarz limitidan oshgandagi dispetcher tasdig‘ini yakuniy tasdiqlashi kerak.
-- Qisman yetkazilgan buyurtmada qarz va to‘lov qanday hisoblanishi, qolgan mahsulotlar uchun yangi yetkazish belgilanishi kerakmi — aniqlashtirish kerak.
+- Qarz yozish qoidasi tasdiqlandi: qarz buyurtma yetkazilganda, faqat yetkazilgan miqdor bo‘yicha yoziladi. Yetkazilmagan, bekor qilingan yoki do‘kon qabul qilmagan buyurtmaga qarz yozilmaydi. Yetkazilgandan keyingi bekor qilish teskari balans yozuvi bilan qaytariladi; `ShopBalance` jurnaldagi o‘tkazilgan yozuvlar yig‘indisiga teng bo‘lishi kerak.
 - Qaytariladigan idishlar bo‘yicha hisob va qarz/tara depozitining o‘zaro bog‘liqligi — yakuniy kelishuv talab qiladi.
 - Oflayn bajarilgan harakatlar serverdagi o‘zgarishlar bilan to‘qnashsa, qaysi qiymat ustun bo‘lishi va foydalanuvchiga qanday xabar berilishi — oldindan belgilanishi kerak.
 

@@ -93,6 +93,22 @@ class AdminApiTests(TestCase):
         order.recalculate_total()
         return order
 
+    def assert_shop_balance_matches_ledger(self, company, shop):
+        entries = BalanceEntry.objects.filter(
+            company=company, shop=shop, posted_at__isnull=False
+        )
+        ledger_balance = sum(
+            (
+                entry.amount
+                if entry.direction == BalanceEntry.Direction.DEBIT
+                else -entry.amount
+                for entry in entries
+            ),
+            Decimal("0.00"),
+        )
+        balance = ShopBalance.objects.get(company=company, shop=shop)
+        self.assertEqual(balance.current_balance, ledger_balance)
+
     def test_order_list_filters_and_is_scoped_to_admin_company(self):
         own_order = self.make_order()
         self.make_order(company=self.other_company, shop=self.other_shop)
@@ -125,6 +141,9 @@ class AdminApiTests(TestCase):
 
     def test_delivery_posts_debt_for_partially_delivered_quantities(self):
         order = self.make_order(quantity="2.00")
+        other_company_balance = ShopBalance.objects.create(
+            company=self.other_company, shop=self.other_shop
+        )
         self.client.post(
             f"/api/v1/admin/orders/{order.pk}/status/",
             {"status": Order.Status.CONFIRMED, "reason": "Tasdiq"},
@@ -161,6 +180,14 @@ class AdminApiTests(TestCase):
         self.assertEqual(
             ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
             Decimal("1250.00"),
+        )
+        self.assert_shop_balance_matches_ledger(self.company, self.shop)
+        other_company_balance.refresh_from_db()
+        self.assertEqual(other_company_balance.current_balance, Decimal("0.00"))
+        self.assertFalse(
+            BalanceEntry.objects.filter(
+                company=self.other_company, shop=self.other_shop
+            ).exists()
         )
         self.assertTrue(AuditLog.objects.filter(
             actor=self.admin, entity_type="Order", entity_id=str(order.pk)
@@ -272,6 +299,7 @@ class AdminApiTests(TestCase):
             Decimal("0.00"),
         )
         self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
+        self.assert_shop_balance_matches_ledger(self.company, self.shop)
 
     def test_cancelling_delivered_order_reverses_delivered_debt(self):
         order = self.make_order(quantity="2.00")
@@ -315,6 +343,7 @@ class AdminApiTests(TestCase):
             ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
             Decimal("0.00"),
         )
+        self.assert_shop_balance_matches_ledger(self.company, self.shop)
 
     def test_bulk_confirm_and_picking_totals(self):
         delivery_date = date.today() + timedelta(days=1)

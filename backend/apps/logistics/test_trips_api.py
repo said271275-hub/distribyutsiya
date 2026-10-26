@@ -817,6 +817,11 @@ class TripApiTests(TestCase):
             AuditLog.objects.filter(action="trip.stop.delivered", entity_id=str(stop.pk)).count(),
             1,
         )
+        self.assertEqual(BalanceEntry.objects.filter(order=order).count(), 1)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("1000.00"),
+        )
 
     def test_driver_issue_is_scoped_to_own_trip_and_stop(self):
         own_trip = self.create_trip()
