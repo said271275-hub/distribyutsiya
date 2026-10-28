@@ -14,7 +14,7 @@ from apps.catalog.models import Product
 from apps.companies.models import Company, CompanyShopLink, Shop
 from apps.logistics.models import DriverProfile, Trip, TripStop, TripStopOrder, Vehicle
 from apps.logistics.routing import nearest_neighbor_order
-from apps.orders.models import Order, OrderItem, OrderStatusHistory
+from apps.orders.models import Order, OrderItem, OrderStatusHistory, SmsOutbox
 from apps.payments.models import BalanceEntry, ShopBalance
 
 
@@ -484,6 +484,17 @@ class TripApiTests(TestCase):
                 order=order, actor=self.admin, status=Order.Status.CONFIRMED
             ).exists())
             self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
+            self.assertTrue(
+                SmsOutbox.objects.filter(
+                    order=order,
+                    event=SmsOutbox.Event.CONFIRMED,
+                ).exists()
+            )
+            assigned_sms = SmsOutbox.objects.get(
+                order=order,
+                event=SmsOutbox.Event.TRIP_ASSIGNED,
+            )
+            self.assertEqual(assigned_sms.eta, stop.eta)
         self.assertTrue(AuditLog.objects.filter(
             actor=self.admin, action="trip.confirm", entity_id=str(trip.pk)
         ).exists())
@@ -922,6 +933,13 @@ class TripApiTests(TestCase):
             ).count(),
             2,
         )
+        self.assertEqual(
+            SmsOutbox.objects.filter(
+                order=order,
+                event=SmsOutbox.Event.SHOP_CLOSED,
+            ).count(),
+            1,
+        )
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.IN_TRANSIT)
         self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
@@ -1043,6 +1061,18 @@ class TripApiTests(TestCase):
         self.assertEqual(order.status, Order.Status.DELIVERED)
         self.assertEqual(item.delivered_quantity, Decimal("1.25"))
         self.assertEqual(untouched_order.status, Order.Status.IN_TRANSIT)
+        self.assertTrue(
+            SmsOutbox.objects.filter(
+                order=order,
+                event=SmsOutbox.Event.PARTIAL_DELIVERY,
+            ).exists()
+        )
+        self.assertFalse(
+            SmsOutbox.objects.filter(
+                order=order,
+                event=SmsOutbox.Event.DELIVERED,
+            ).exists()
+        )
         entry = BalanceEntry.objects.get(order=order)
         self.assertEqual(entry.amount, Decimal("1250.00"))
         self.assertEqual(

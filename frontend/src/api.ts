@@ -85,10 +85,13 @@ type RetriableConfig = InternalAxiosRequestConfig & { _retry?: boolean }
 
 const publicAuthPaths = [
   '/auth/login/',
+  '/auth/login/otp/',
   '/auth/staff/login/',
+  '/auth/staff/login/otp/',
   '/auth/register/',
   '/auth/register/otp/',
   '/auth/restore/',
+  '/auth/restore/otp/',
   '/auth/refresh/',
 ]
 

@@ -17,6 +17,8 @@ class DemoSeedCommandTests(TestCase):
     @override_settings(
         DEBUG=True,
         DEV_OTP_ENABLED=True,
+        OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+        DEV_OTP_CODE="123456",
         DEV_STAFF_PASSWORD="Demo-staff-password-123!",
     )
     def test_seed_does_not_create_users_without_demo_users_flag(self):
@@ -103,6 +105,8 @@ class DemoSeedCommandTests(TestCase):
     @override_settings(
         DEBUG=True,
         DEV_OTP_ENABLED=True,
+        OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+        DEV_OTP_CODE="123456",
         DEV_STAFF_PASSWORD="Demo-staff-password-123!",
     )
     def test_seed_staff_can_login_with_configured_local_password(self):
@@ -110,9 +114,20 @@ class DemoSeedCommandTests(TestCase):
 
         user = User.objects.get(phone="+998900009901")
         self.assertTrue(user.check_password("Demo-staff-password-123!"))
-        response = APIClient().post(
-            "/api/auth/staff/login/",
+        client = APIClient()
+        requested = client.post(
+            "/api/auth/staff/login/otp/",
             {"phone": user.phone, "password": "Demo-staff-password-123!"},
+            format="json",
+        )
+        self.assertEqual(requested.status_code, 202, requested.data)
+        response = client.post(
+            "/api/auth/staff/login/",
+            {
+                "phone": user.phone,
+                "password": "Demo-staff-password-123!",
+                "code": "123456",
+            },
             format="json",
         )
         self.assertEqual(response.status_code, 200, response.data)

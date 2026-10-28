@@ -52,6 +52,7 @@ class Shop(TimestampedModel):
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.ACTIVE
     )
+    sms_notifications_enabled = models.BooleanField(default=True)
 
     class Meta:
         ordering = ("name",)

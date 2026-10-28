@@ -24,6 +24,7 @@ from apps.accounts.serializers import (
     DeletionRequestSerializer,
     DetailResponseSerializer,
     LoginSerializer,
+    LoginOTPVerifySerializer,
     OTPRequestSerializer,
     RegistrationResponseSerializer,
     RefreshResponseSerializer,
@@ -37,6 +38,9 @@ from apps.accounts.services import (
     request_account_deletion,
     restore_account,
     send_registration_otp,
+    send_login_otp,
+    send_restore_otp,
+    consume_login_otp,
 )
 from apps.accounts.authentication import CookieAwareJWTAuthentication
 
@@ -127,12 +131,17 @@ class ShopRegistrationView(PublicAuthView):
 class LoginView(PublicAuthView):
     scope = "shop"
 
-    @extend_schema(request=LoginSerializer, responses={200: AuthResponseSerializer})
+    @extend_schema(request=LoginOTPVerifySerializer, responses={200: AuthResponseSerializer})
     def post(self, request):
-        serializer = LoginSerializer(data=request.data)
+        serializer = LoginOTPVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        consume_login_otp(
+            serializer.validated_data["phone"],
+            serializer.validated_data["code"],
+        )
         user = login_user(
-            **serializer.validated_data,
+            phone=serializer.validated_data["phone"],
+            password=serializer.validated_data["password"],
             scope=self.scope,
             ip_address=request.META.get("REMOTE_ADDR") or "127.0.0.1",
         )
@@ -140,7 +149,30 @@ class LoginView(PublicAuthView):
         return issue_tokens(response, user)
 
 
+class LoginOTPView(PublicAuthView):
+    scope = "shop"
+
+    @extend_schema(request=LoginSerializer, responses={202: DetailResponseSerializer})
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        send_login_otp(
+            phone=serializer.validated_data["phone"],
+            password=serializer.validated_data["password"],
+            scope=self.scope,
+            ip_address=request.META.get("REMOTE_ADDR") or "127.0.0.1",
+        )
+        return Response(
+            {"detail": "Kirish kodi telefon raqamingizga yuborildi."},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
 class StaffLoginView(LoginView):
+    scope = "staff"
+
+
+class StaffLoginOTPView(LoginOTPView):
     scope = "staff"
 
 
@@ -256,6 +288,20 @@ class AccountRestoreView(PublicAuthView):
     def post(self, request):
         serializer = AccountRestoreSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = restore_account(**serializer.validated_data)
+        values = serializer.validated_data
+        consume_login_otp(values["phone"], values["code"])
+        user = restore_account(phone=values["phone"], password=values["password"])
         response = Response({"detail": "Akkaunt tiklandi."})
         return issue_tokens(response, user)
+
+
+class AccountRestoreOTPView(PublicAuthView):
+    @extend_schema(request=LoginSerializer, responses={202: DetailResponseSerializer})
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        send_restore_otp(**serializer.validated_data)
+        return Response(
+            {"detail": "Akkauntni tiklash kodi telefon raqamingizga yuborildi."},
+            status=status.HTTP_202_ACCEPTED,
+        )

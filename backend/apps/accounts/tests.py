@@ -6,7 +6,7 @@ from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
@@ -25,7 +25,12 @@ from apps.accounts.models import (
     User,
 )
 from apps.accounts.services import normalize_uz_phone
-from apps.accounts.sms import DevOtpProvider, get_otp_provider
+from apps.accounts.sms import (
+    DevOtpProvider,
+    EskizSmsClient,
+    SmsProviderError,
+    get_otp_provider,
+)
 from apps.audit.models import AuditLog
 from apps.companies.models import Company, CompanyShopLink, Shop
 from apps.core.permissions import (
@@ -212,13 +217,26 @@ class AuthFlowTests(TestCase):
         self.client = APIClient()
 
     def login(self, *, staff=False, phone=None):
-        response = self.client.post(
-            "/api/auth/staff/login/" if staff else "/api/auth/login/",
-            {"phone": phone or (self.staff_user.phone if staff else self.shop_user.phone),
-             "password": PASSWORD},
-            format="json",
-        )
-        return response
+        phone = phone or (self.staff_user.phone if staff else self.shop_user.phone)
+        path = "/api/auth/staff/login/" if staff else "/api/auth/login/"
+        otp_path = f"{path}otp/"
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
+            requested = self.client.post(
+                otp_path,
+                {"phone": phone, "password": PASSWORD},
+                format="json",
+            )
+            if requested.status_code != 202:
+                return requested
+            return self.client.post(
+                path,
+                {"phone": phone, "password": PASSWORD, "code": DEV_TEST_OTP_CODE},
+                format="json",
+            )
 
     def bearer_client(self, access):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
@@ -307,6 +325,30 @@ class AuthFlowTests(TestCase):
         self.assertEqual(otp.failed_attempts, 5)
         self.assertIsNotNone(otp.consumed_at)
 
+    def test_expired_registration_otp_is_rejected(self):
+        phone = "+998905551013"
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
+            requested = self.client.post(
+                "/api/auth/register/otp/",
+                {"phone": phone},
+                format="json",
+            )
+            self.assertEqual(requested.status_code, 202)
+            PhoneOTP.objects.filter(phone=phone).update(
+                expires_at=timezone.now() - timedelta(seconds=1)
+            )
+            response = self.client.post(
+                "/api/auth/register/",
+                {"phone": phone, "code": DEV_TEST_OTP_CODE, "password": PASSWORD},
+                format="json",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("muddati", str(response.data).lower())
+
     def test_sms_send_rate_limit_is_three_codes_per_phone(self):
         with override_settings(
             OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
@@ -343,6 +385,100 @@ class AuthFlowTests(TestCase):
             with self.assertRaises(ImproperlyConfigured):
                 get_otp_provider()
 
+    def test_login_requires_hashed_short_lived_one_time_code(self):
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
+            requested = self.client.post(
+                "/api/auth/login/otp/",
+                {"phone": self.shop_user.phone, "password": PASSWORD},
+                format="json",
+            )
+            self.assertEqual(requested.status_code, 202)
+            otp = PhoneOTP.objects.get(
+                phone=self.shop_user.phone,
+                purpose=PhoneOTP.Purpose.LOGIN,
+            )
+            self.assertNotEqual(otp.code_hash, DEV_TEST_OTP_CODE)
+            self.assertAlmostEqual(
+                (otp.expires_at - otp.created_at).total_seconds(),
+                timedelta(minutes=5).total_seconds(),
+                delta=1,
+            )
+
+            response = self.client.post(
+                "/api/auth/login/",
+                {
+                    "phone": self.shop_user.phone,
+                    "password": PASSWORD,
+                    "code": DEV_TEST_OTP_CODE,
+                },
+                format="json",
+            )
+        self.assertEqual(response.status_code, 200, response.data)
+        otp.refresh_from_db()
+        self.assertIsNotNone(otp.consumed_at)
+
+    def test_eskiz_refreshes_expiring_token_using_official_refresh_route(self):
+        client = EskizSmsClient()
+        client._token = "old-token"
+        client._token_email = ""
+        client._token_renew_at = 0
+        with override_settings(ESKIZ_EMAIL=""):
+            with patch.object(
+                client,
+                "_post",
+                return_value={"data": {"token": "renewed-token"}},
+            ) as post:
+                token = client._get_token()
+
+        self.assertEqual(token, "renewed-token")
+        post.assert_called_once_with("/auth/refresh", None, "old-token")
+
+    def test_eskiz_relogs_in_when_expired_refresh_token_is_rejected(self):
+        client = EskizSmsClient()
+        client._token = "expired-token"
+        client._token_email = ""
+        client._token_renew_at = 0
+        with override_settings(ESKIZ_EMAIL=""):
+            with patch.object(
+                client,
+                "_post",
+                side_effect=[
+                    SmsProviderError("http_error", 401),
+                    {"data": {"token": "new-token"}},
+                ],
+            ) as post:
+                token = client._get_token()
+
+        self.assertEqual(token, "new-token")
+        self.assertEqual(post.call_args_list[0].args[0], "/auth/refresh")
+        self.assertEqual(post.call_args_list[1].args[0], "/auth/login")
+
+    def test_otp_sms_failure_log_contains_only_phone_suffix(self):
+        provider = Mock()
+        provider.generate_code.return_value = DEV_TEST_OTP_CODE
+        provider.send.side_effect = SmsProviderError("network_error")
+        with override_settings(OTP_PROVIDER="apps.accounts.sms.EskizOtpProvider"):
+            with patch(
+                "apps.accounts.sms.get_otp_provider",
+                return_value=provider,
+            ):
+                with self.assertLogs("apps.accounts.services", level="WARNING") as captured:
+                    response = self.client.post(
+                        "/api/auth/register/otp/",
+                        {"phone": "+998905551212"},
+                        format="json",
+                    )
+
+        self.assertEqual(response.status_code, 400)
+        text = "\n".join(captured.output)
+        self.assertIn("1212", text)
+        self.assertNotIn("+998905551212", text)
+        self.assertNotIn(DEV_TEST_OTP_CODE, text)
+
     def test_dev_otp_is_rejected_during_production_settings_load(self):
         environment = os.environ.copy()
         environment.update(
@@ -363,6 +499,28 @@ class AuthFlowTests(TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("ImproperlyConfigured", result.stderr)
         self.assertIn("DEV_OTP_ENABLED", result.stderr)
+
+    def test_production_requires_eskiz_configuration(self):
+        environment = os.environ.copy()
+        for key in ("ESKIZ_EMAIL", "ESKIZ_PASSWORD", "ESKIZ_FROM", "DEV_STAFF_PASSWORD"):
+            environment.pop(key, None)
+        environment.update(
+            DJANGO_SECRET_KEY="test-only-secret-key-long-enough-for-hmac",
+            DJANGO_DEBUG="False",
+            DEV_OTP_ENABLED="False",
+            OTP_PROVIDER="apps.accounts.sms.EskizOtpProvider",
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", "import config.settings"],
+            cwd=Path(__file__).resolve().parents[2],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ESKIZ_EMAIL", result.stderr)
 
     def test_dev_staff_password_is_rejected_without_local_otp_flags(self):
         environment = os.environ.copy()
@@ -386,7 +544,7 @@ class AuthFlowTests(TestCase):
     def test_five_failed_logins_create_a_temporary_block(self):
         for index in range(5):
             response = self.client.post(
-                "/api/auth/login/",
+                "/api/auth/login/otp/",
                 {"phone": self.shop_user.phone, "password": f"wrong-{index}"},
                 format="json",
             )
@@ -397,14 +555,14 @@ class AuthFlowTests(TestCase):
         self.assertEqual(attempt.failures, 5)
         self.assertGreater(attempt.blocked_until, timezone.now())
         self.assertIn("vaqtincha bloklangan", str(self.client.post(
-            "/api/auth/login/",
+            "/api/auth/login/otp/",
             {"phone": self.shop_user.phone, "password": PASSWORD},
             format="json",
         ).data["detail"]).lower())
 
     def test_login_success_and_failure_are_written_to_audit_log(self):
         failed = self.client.post(
-            "/api/auth/login/",
+            "/api/auth/login/otp/",
             {"phone": self.shop_user.phone, "password": "wrong-password"},
             format="json",
         )
@@ -524,11 +682,26 @@ class AuthFlowTests(TestCase):
         self.assertEqual(blocked.status_code, 401)
 
         self.client.credentials()
-        restored = self.client.post(
-            "/api/auth/restore/",
-            {"phone": self.shop_user.phone, "password": PASSWORD},
-            format="json",
-        )
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
+            restore_code = self.client.post(
+                "/api/auth/restore/otp/",
+                {"phone": self.shop_user.phone, "password": PASSWORD},
+                format="json",
+            )
+            self.assertEqual(restore_code.status_code, 202, restore_code.data)
+            restored = self.client.post(
+                "/api/auth/restore/",
+                {
+                    "phone": self.shop_user.phone,
+                    "password": PASSWORD,
+                    "code": DEV_TEST_OTP_CODE,
+                },
+                format="json",
+            )
         self.assertEqual(restored.status_code, 200)
         self.shop_user.refresh_from_db()
         self.assertFalse(self.shop_user.is_blocked)
@@ -677,18 +850,34 @@ class AuthFlowTests(TestCase):
     def test_auth_post_requires_csrf_token(self):
         client = APIClient(enforce_csrf_checks=True)
         denied = client.post(
-            "/api/auth/login/",
+            "/api/auth/login/otp/",
             {"phone": self.shop_user.phone, "password": PASSWORD},
             format="json",
         )
         self.assertEqual(denied.status_code, 403)
         csrf = client.get("/api/auth/csrf/")
-        allowed = client.post(
-            "/api/auth/login/",
-            {"phone": self.shop_user.phone, "password": PASSWORD},
-            format="json",
-            HTTP_X_CSRFTOKEN=csrf.data["csrfToken"],
-        )
+        with override_settings(
+            OTP_PROVIDER="apps.accounts.sms.DevOtpProvider",
+            DEV_OTP_ENABLED=True,
+            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
+        ):
+            requested = client.post(
+                "/api/auth/login/otp/",
+                {"phone": self.shop_user.phone, "password": PASSWORD},
+                format="json",
+                HTTP_X_CSRFTOKEN=csrf.data["csrfToken"],
+            )
+            self.assertEqual(requested.status_code, 202)
+            allowed = client.post(
+                "/api/auth/login/",
+                {
+                    "phone": self.shop_user.phone,
+                    "password": PASSWORD,
+                    "code": DEV_TEST_OTP_CODE,
+                },
+                format="json",
+                HTTP_X_CSRFTOKEN=csrf.data["csrfToken"],
+            )
         self.assertEqual(allowed.status_code, 200)
 
     def test_django_admin_can_create_staff_users(self):

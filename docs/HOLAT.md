@@ -11,14 +11,23 @@
 - **4C-3 — yozilgan:** mahsulot va narxlar, do‘konlar, transport va haydovchilar, xodimlar, qarz va to‘lov sahifalari mavjud. Sahifalardagi yaratish, tahrirlash va to‘lov kiritish foydalanuvchi oqimi sinovlari yetishmaydi.
 - **5-bosqich, 1-bo‘lak — qisman:** haydovchi oynasi o‘z reyslarini, to‘xtashlarini va yuklash ro‘yxatini ko‘rsatadi. Yetkazilgan deb belgilash, qisman yetkazish, to‘lov va qaytarilgan idishlarni qayd etish hali bajarilmagan.
 - **5-bosqich, PWA va oflayn ish — boshlanmagan:** ilovani o‘rnatish, oflayn foydalanish, harakatlarni navbatga olish va keyin sinxronlash yo‘q.
-- **6-bosqich — boshlanmagan:** qo‘shimcha imkoniyatlar keyingi bosqichda bajariladi.
+- **6-bosqich, SMS (Eskiz) — bajarildi:** ro‘yxatdan o‘tish va kirish OTP kodi,
+  buyurtma holati SMS’lari, do‘konchi uchun bildirishnoma sozlamasi va
+  xabarlarni navbatdan qayta yuborish qo‘shildi. Eskiz haqiqiy chaqiruvi
+  maxfiy muhit sozlamalari va tasdiqlangan SMS matnlari mavjud bo‘lganda ishlaydi.
+- **6-bosqichning qolgan imkoniyatlari — bajarilmagan:** hisobotlar, takroriy
+  buyurtmalar, ombor qoldig‘i, yetkazish isboti va ishlab chiqarishga chiqarish.
 
 ## Sinovlar va tekshirilmagan ishlar
 
-- So‘nggi tekshiruvda server sinovlaridan **85**, veb sinovlaridan **35** tasi muvaffaqiyatli o‘tdi.
+- So‘nggi tekshiruvda server sinovlaridan **118**, veb sinovlaridan **42** tasi muvaffaqiyatli o‘tdi.
 - Oxirgi buyurtmani takrorlash, dispetcherning buyurtmani boshqarish, reysni tuzish va 4C-3 sahifalarining to‘liq foydalanuvchi oqimlari uchun veb sinovlari yetishmaydi.
 - Haydovchi oynasining hozirgi ko‘rinishi bor, ammo haydovchining yetkazish amallari va oflayn sinxronlash tekshirilmagan, chunki ular hali yozilmagan.
-- Eskiz SMS xizmati ulanmagan. Docker orqali ishga tushirish tekshirilmagan.
+- Eskiz SMS provayderi mock bilan sinovdan o‘tkaziladi; haqiqiy SMS yuborish
+  maxfiy Eskiz sozlamalari va akkauntda tasdiqlangan SMS matnlarini talab qiladi.
+  SMS navbatining doimiy qayta ishlashi uchun `process_sms_outbox --loop`
+  buyrug‘i alohida ishchi sifatida ishlashi kerak. Docker orqali ishga tushirish
+  tekshirilmagan.
 - Reys sig‘imi barcha mahsulotlarda vazn bo‘lsa vazn, aks holda barcha mahsulotlarda hajm bo‘yicha tekshiriladi. O‘lchovlar aralash yoki yetishmasa sig‘im noma’lum deb qoladi.
 
 ## Ochiq qarorlar
@@ -64,7 +73,7 @@ npm.cmd run dev
 
 ## Ogohlantirishlar
 
-- `DEV_OTP_ENABLED` odatda o‘chiq tursin. Sinov OTP kodini ishlab chiqarish muhitida yoqmang; Eskiz SMS xizmati ulanmagan.
+- `DEV_OTP_ENABLED` odatda o‘chiq tursin. Sinov OTP kodini ishlab chiqarish muhitida yoqmang. Eskiz sozlamalarini faqat muhit o‘zgaruvchilarida saqlang.
 - `ROUTING_EXTERNAL_ENABLED`, `OSRM_BASE_URL`, `ROUTING_TIMEOUT_SECONDS`, `ROUTE_START_TIME`, `ETA_WINDOW_MINUTES` va `TRIP_CLUSTER_RADIUS_KM` yo‘nalish hisoblash sozlamalaridir. Mahalliy sinovda umumiy OSRM sinov serveri ishlatilishi mumkin; ishlab chiqarish muhitida o‘zingiz boshqaradigan OSRM’dan foydalaning. OpenRouteService’ni ulash uchun alohida moslashtirgich kerak. Umumiy sinov serveridan ishlab chiqarishda foydalanmang. Tashqi yo‘nalish xizmati o‘chirilganida ham zaxira hisob ishlaydi.
 
 ## Keyingi qadam

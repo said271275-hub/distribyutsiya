@@ -38,6 +38,7 @@ from apps.logistics.routing import (
     nearest_neighbor_order,
 )
 from apps.orders.models import Order, OrderItem
+from apps.orders.sms_notifications import queue_order_sms
 
 
 class TripPage(PageNumberPagination):
@@ -1007,6 +1008,16 @@ class TripAdminViewSet(viewsets.ViewSet):
             elif order.status != Order.Status.CONFIRMED:
                 raise ValidationError({"trip": "Faqat yangi yoki tasdiqlangan buyurtmalarni reysga tasdiqlash mumkin."})
         source = calculate_trip_route(trip)
+        for link in (
+            TripStopOrder.objects.filter(trip_stop__trip=trip)
+            .select_related("order", "trip_stop")
+            .order_by("order_id")
+        ):
+            queue_order_sms(
+                link.order,
+                "trip_assigned",
+                eta=link.trip_stop.eta,
+            )
         trip.status = Trip.Status.CONFIRMED
         trip.save(update_fields=("status", "updated_at"))
         audit(request.user, self.company, "trip.confirm", trip, {
@@ -1309,6 +1320,7 @@ class DriverStopIssueView(APIView):
         ):
             raise ValidationError({"stop": "Reys nuqtasidagi buyurtma mos emas."})
         delivered_orders = []
+        partial_order_ids = []
         if values["reason"] != "partial_delivery":
             for link in links:
                 order = link.order
@@ -1395,6 +1407,9 @@ class DriverStopIssueView(APIView):
                         )
                     continue
                 has_delivered_quantity = True
+                is_partial_order = any(
+                    quantities[item.pk] < item.quantity for item in items
+                )
                 if order.status == Order.Status.CONFIRMED:
                     transition_order(
                         order=order,
@@ -1418,7 +1433,10 @@ class DriverStopIssueView(APIView):
                         {"item_id": item.pk, "quantity": quantities[item.pk]}
                         for item in items
                     ],
+                    notify_sms=not is_partial_order,
                 )
+                if is_partial_order:
+                    partial_order_ids.append(order.pk)
                 delivered_orders.append({
                     "order_id": order_id,
                     "items": [
@@ -1449,6 +1467,13 @@ class DriverStopIssueView(APIView):
             entity_id=str(stop.pk),
             after=event,
         )
+        if values["reason"] == "shop_closed":
+            for link in links:
+                if link.order.status != Order.Status.DELIVERED:
+                    queue_order_sms(link.order, "shop_closed")
+        else:
+            for order_id in partial_order_ids:
+                queue_order_sms(orders_by_id[order_id], "partial_delivery")
         _save_driver_action_receipt(request, trip, stop, "issue", prepared_action)
         if values["reason"] == "partial_delivery":
             remaining_orders = TripStopOrder.objects.filter(

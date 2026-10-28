@@ -22,7 +22,7 @@ class ShopProfileSerializer(serializers.ModelSerializer):
         fields = (
             "id", "owner_id", "owner_phone", "name", "owner_name",
             "phone_primary", "phone_secondary", "address", "district",
-            "latitude", "longitude", "company_contacts",
+            "latitude", "longitude", "company_contacts", "sms_notifications_enabled",
         )
 
     @extend_schema_field(serializers.ListField(child=serializers.DictField()))

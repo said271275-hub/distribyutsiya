@@ -56,4 +56,6 @@ export const ru = {
   gpsError: 'Не удалось определить местоположение.',
   orderConfirmed: 'Заказ отправлен',
   profileSaved: 'Профиль сохранён',
+  smsNotifications: 'SMS-уведомления о заказах',
+  smsNotificationsHint: 'При отключении сообщения о заказах не приходят. Коды входа и подтверждения продолжают приходить.',
 } as const

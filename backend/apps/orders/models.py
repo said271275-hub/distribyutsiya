@@ -1,4 +1,5 @@
 from decimal import Decimal
+from django.utils import timezone
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
@@ -119,3 +120,39 @@ class OrderItem(CompanyOwnedModel):
         if self.quantity is not None and self.unit_price is not None:
             self.line_total = self.quantity * self.unit_price
         super().save(*args, **kwargs)
+
+
+class SmsOutbox(models.Model):
+    class Event(models.TextChoices):
+        RECEIVED = "received", "Qabul qilindi"
+        CONFIRMED = "confirmed", "Tasdiqlandi"
+        TRIP_ASSIGNED = "trip_assigned", "Reysga qo‘shildi"
+        DELIVERED = "delivered", "Yetkazildi"
+        SHOP_CLOSED = "shop_closed", "Do‘kon yopiq"
+        PARTIAL_DELIVERY = "partial_delivery", "Qisman yetkazildi"
+
+    class State(models.TextChoices):
+        PENDING = "pending", "Navbatda"
+        SENDING = "sending", "Yuborilmoqda"
+        SENT = "sent", "Yuborildi"
+        FAILED = "failed", "Xato"
+        SUPPRESSED = "suppressed", "O‘chirib qo‘yilgan"
+
+    order = models.ForeignKey(
+        Order, on_delete=models.PROTECT, related_name="sms_outbox"
+    )
+    event = models.CharField(max_length=20, choices=Event.choices)
+    eta = models.DateTimeField(null=True, blank=True)
+    state = models.CharField(
+        max_length=12, choices=State.choices, default=State.PENDING
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    last_error_code = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
+        indexes = [models.Index(fields=("state", "next_attempt_at"))]

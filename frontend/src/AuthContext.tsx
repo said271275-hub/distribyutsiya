@@ -101,9 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearAuth, queryClient])
 
   const login = useCallback(
-    async (phone: string, password: string, scope: LoginScope) => {
+    async (phone: string, password: string, scope: LoginScope, code: string) => {
       const path = scope === 'staff' ? '/auth/staff/login/' : '/auth/login/'
-      const { data } = await api.post<AuthResponse>(path, { phone, password })
+      const { data } = await api.post<AuthResponse>(path, { phone, password, code })
       localStorage.removeItem('driver-offline-logout')
       setAccessToken(data.access)
       setUser(data.user)
@@ -114,8 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const restore = useCallback(async (phone: string, password: string) => {
-    const { data } = await api.post<AuthResponse>('/auth/restore/', { phone, password })
+  const restore = useCallback(async (phone: string, password: string, code: string) => {
+    const { data } = await api.post<AuthResponse>('/auth/restore/', { phone, password, code })
     localStorage.removeItem('driver-offline-logout')
     setAccessToken(data.access)
     setUser(data.user)

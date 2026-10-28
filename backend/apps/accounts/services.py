@@ -1,4 +1,5 @@
 import hmac
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -17,6 +18,8 @@ from apps.accounts.models import (
     User,
 )
 from apps.audit.models import AuditLog
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_uz_phone(value: str) -> str:
@@ -42,9 +45,9 @@ def _otp_digest(code: str) -> str:
     return salted_hmac("accounts.PhoneOTP", code, secret=settings.SECRET_KEY).hexdigest()
 
 
-def send_registration_otp(phone: str) -> None:
+def _send_otp(phone: str, purpose: str, message_template: str) -> None:
     now = timezone.now()
-    if User.objects.filter(phone=phone).exists():
+    if purpose == PhoneOTP.Purpose.REGISTRATION and User.objects.filter(phone=phone).exists():
         raise ValidationError({"phone": "Bu telefon raqami allaqachon ro‘yxatdan o‘tgan."})
     from apps.accounts.sms import get_otp_provider
 
@@ -68,21 +71,65 @@ def send_registration_otp(phone: str) -> None:
         window.save(update_fields=("window_started_at", "sent_count"))
         PhoneOTP.objects.create(
             phone=phone,
-            purpose=PhoneOTP.Purpose.REGISTRATION,
+            purpose=purpose,
             code_hash=_otp_digest(code),
             expires_at=now + timedelta(minutes=settings.AUTH_OTP_TTL_MINUTES),
         )
-    provider.send(phone, f"Ro‘yxatdan o‘tish kodi: {code}")
+    from apps.accounts.sms import SmsProviderError
+    try:
+        provider.send(phone, message_template.format(code=code))
+    except SmsProviderError as error:
+        phone_suffix = "".join(character for character in phone if character.isdigit())[-4:]
+        logger.warning(
+            "OTP SMS yuborilmadi: raqam_oxiri=%s xato=%s",
+            phone_suffix,
+            error.code,
+        )
+        raise ValidationError({"detail": "SMS kod yuborilmadi. Keyinroq qayta urinib ko‘ring."}) from None
 
 
-def consume_registration_otp(phone: str, code: str) -> None:
+def send_registration_otp(phone: str) -> None:
+    _send_otp(phone, PhoneOTP.Purpose.REGISTRATION, "Ro‘yxatdan o‘tish kodi: {code}")
+
+
+def send_login_otp(*, phone: str, password: str, scope: str, ip_address: str) -> None:
+    login_user(
+        phone=phone,
+        password=password,
+        scope=scope,
+        ip_address=ip_address,
+        complete=False,
+    )
+    _send_otp(phone, PhoneOTP.Purpose.LOGIN, "Kirish kodi: {code}")
+
+
+def send_restore_otp(*, phone: str, password: str) -> None:
+    phone = normalize_uz_phone(phone)
+    user = User.objects.filter(phone=phone, role=User.Role.SHOP_OWNER).first()
+    if user is None or not user.check_password(password):
+        raise AuthenticationFailed("Telefon raqami yoki parol noto‘g‘ri.")
+    deletion = (
+        user.deletion_requests.filter(status=DeletionRequest.Status.PENDING)
+        .order_by("-requested_at")
+        .first()
+    )
+    if deletion is None or deletion.scheduled_for <= timezone.now():
+        raise ValidationError({"account": "Akkauntni tiklash muddati tugagan."})
+    _send_otp(phone, PhoneOTP.Purpose.LOGIN, "Akkauntni tiklash kodi: {code}")
+
+
+def consume_login_otp(phone: str, code: str) -> None:
+    _consume_otp(phone, PhoneOTP.Purpose.LOGIN, code)
+
+
+def _consume_otp(phone: str, purpose: str, code: str) -> None:
     invalid_code = False
     with transaction.atomic():
         otp = (
             PhoneOTP.objects.select_for_update()
             .filter(
                 phone=phone,
-                purpose=PhoneOTP.Purpose.REGISTRATION,
+                purpose=purpose,
                 consumed_at__isnull=True,
             )
             .order_by("-created_at")
@@ -102,6 +149,10 @@ def consume_registration_otp(phone: str, code: str) -> None:
             otp.save(update_fields=("consumed_at",))
     if invalid_code:
         raise ValidationError({"code": "SMS kodi noto‘g‘ri yoki muddati tugagan."})
+
+
+def consume_registration_otp(phone: str, code: str) -> None:
+    _consume_otp(phone, PhoneOTP.Purpose.REGISTRATION, code)
 
 
 def register_shop_owner(*, phone: str, code: str, password: str) -> User:
@@ -127,7 +178,9 @@ def register_shop_owner(*, phone: str, code: str, password: str) -> User:
     return user
 
 
-def login_user(*, phone: str, password: str, scope: str, ip_address: str) -> User:
+def login_user(
+    *, phone: str, password: str, scope: str, ip_address: str, complete: bool = True
+) -> User:
     phone = normalize_uz_phone(phone)
     now = timezone.now()
     error_message = None
@@ -167,12 +220,13 @@ def login_user(*, phone: str, password: str, scope: str, ip_address: str) -> Use
                     else "Telefon raqami yoki parol noto‘g‘ri."
                 )
             else:
-                LoginAttempt.objects.filter(
-                    phone=phone, ip_address=ip_address, scope=scope
-                ).delete()
-                user.last_login = now
-                user.save(update_fields=("last_login",))
-                audit_event(f"{scope}_login_succeeded", user=user, entity_type="Login")
+                if complete:
+                    LoginAttempt.objects.filter(
+                        phone=phone, ip_address=ip_address, scope=scope
+                    ).delete()
+                    user.last_login = now
+                    user.save(update_fields=("last_login",))
+                    audit_event(f"{scope}_login_succeeded", user=user, entity_type="Login")
                 authenticated_user = user
 
     if error_message:

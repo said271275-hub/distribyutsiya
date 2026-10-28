@@ -153,6 +153,9 @@ AUTH_OTP_MAX_FAILURES = 5
 OTP_PROVIDER = os.environ.get("OTP_PROVIDER", "")
 DEV_OTP_ENABLED = env_bool("DEV_OTP_ENABLED", False)
 DEV_OTP_CODE = os.environ.get("DEV_OTP_CODE", "")
+ESKIZ_EMAIL = os.environ.get("ESKIZ_EMAIL", "")
+ESKIZ_PASSWORD = os.environ.get("ESKIZ_PASSWORD", "")
+ESKIZ_FROM = os.environ.get("ESKIZ_FROM", "")
 DEV_STAFF_PASSWORD = os.environ.get("DEV_STAFF_PASSWORD", "")
 if DEV_STAFF_PASSWORD and (not DEBUG or not DEV_OTP_ENABLED):
     raise ImproperlyConfigured(
@@ -162,6 +165,15 @@ if not DEBUG and DEV_OTP_ENABLED:
     raise ImproperlyConfigured("DEV_OTP_ENABLED production rejimida yoqilishi mumkin emas.")
 if DEV_OTP_ENABLED and not re.fullmatch(r"\d{6}", DEV_OTP_CODE):
     raise ImproperlyConfigured("DEV_OTP_ENABLED uchun DEV_OTP_CODE 6 xonali bo‘lishi kerak.")
+if not DEBUG:
+    if OTP_PROVIDER != "apps.accounts.sms.EskizOtpProvider":
+        raise ImproperlyConfigured(
+            "Production muhitida OTP_PROVIDER EskizOtpProvider bo‘lishi kerak."
+        )
+    if not ESKIZ_EMAIL or not ESKIZ_PASSWORD or not ESKIZ_FROM:
+        raise ImproperlyConfigured(
+            "Production muhitida ESKIZ_EMAIL, ESKIZ_PASSWORD va ESKIZ_FROM sozlanishi kerak."
+        )
 
 ROUTING_EXTERNAL_ENABLED = env_bool("ROUTING_EXTERNAL_ENABLED", DEBUG)
 OSRM_BASE_URL = os.environ.get(

@@ -28,6 +28,7 @@ class LoginAttempt(models.Model):
 class PhoneOTP(models.Model):
     class Purpose(models.TextChoices):
         REGISTRATION = "registration", "Ro‘yxatdan o‘tish"
+        LOGIN = "login", "Kirish"
 
     phone = models.CharField(max_length=20)
     purpose = models.CharField(max_length=16, choices=Purpose.choices)

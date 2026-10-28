@@ -24,6 +24,7 @@ from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
 from apps.core.permissions import CompanyAdminPermission
 from apps.logistics.models import DriverProfile, Trip, Vehicle
 from apps.orders.models import Order, OrderStatusHistory
+from apps.orders.sms_notifications import queue_order_sms
 from apps.orders.shop_api import ShopOrderSerializer
 from apps.payments.models import BalanceEntry, Payment, ShopBalance
 
@@ -102,6 +103,7 @@ def transition_order(
     reason,
     allow_credit_limit_exceeded=False,
     delivered_items=None,
+    notify_sms=True,
 ):
     order = Order.objects.select_for_update().select_related("shop", "company").get(pk=order.pk)
     previous = order.status
@@ -196,6 +198,10 @@ def transition_order(
             )
             entry.post()
     audit(actor, order.company, f"order.{target}", order, {"status": previous}, order_state(order))
+    if notify_sms and target == Order.Status.CONFIRMED:
+        queue_order_sms(order, "confirmed")
+    elif notify_sms and target == Order.Status.DELIVERED:
+        queue_order_sms(order, "delivered")
     return order
 
 

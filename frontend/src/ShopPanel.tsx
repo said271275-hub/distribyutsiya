@@ -54,6 +54,7 @@ type ShopProfile = {
   district: string
   latitude: string
   longitude: string
+  sms_notifications_enabled: boolean
   company_contacts: Array<{ id: number; name: string; phone: string }>
 }
 type CatalogProduct = {
@@ -146,7 +147,8 @@ const uz: Record<CopyKey, string> = {
   emptyOrders: 'Hozircha buyurtma yo‘q', noPayments: 'Hozircha to‘lov yo‘q',
   loading: 'Yuklanmoqda…', tryAgain: 'Qayta urinish',
   gpsError: 'Joylashuvni aniqlab bo‘lmadi.', orderConfirmed: 'Buyurtma yuborildi',
-  profileSaved: 'Profil saqlandi',
+  profileSaved: 'Profil saqlandi', smsNotifications: 'Buyurtma SMS xabarnomalari',
+  smsNotificationsHint: 'O‘chirilganda buyurtma xabarlari kelmaydi. Kirish va tasdiqlash kodlari kelishda davom etadi.',
 }
 
 const profileSchema = z.object({
@@ -159,6 +161,7 @@ const profileSchema = z.object({
   district: z.string().trim().min(2, 'Tumanni kiriting.').max(120),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+  sms_notifications_enabled: z.boolean(),
 })
 type ProfileValues = z.infer<typeof profileSchema>
 
@@ -610,7 +613,7 @@ function ShopProfilePage({ t }: { t: Copy }) {
   const companies = useQuery({ queryKey: ['shop-companies'], queryFn: async () => (await api.get<CompanyOption[]>('/v1/shop/companies/')).data, enabled: profile.data === null })
   const form = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { company_id: '', name: '', owner_name: '', phone_primary: '', phone_secondary: '', address: '', district: '', latitude: 40.840000, longitude: 68.660000 },
+    defaultValues: { company_id: '', name: '', owner_name: '', phone_primary: '', phone_secondary: '', address: '', district: '', latitude: 40.840000, longitude: 68.660000, sms_notifications_enabled: true },
   })
   const { register, control, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = form
   const latitude = watch('latitude') || 40.840000
@@ -622,6 +625,7 @@ function ShopProfilePage({ t }: { t: Copy }) {
       phone_secondary: profile.data.phone_secondary ? formatPhone(profile.data.phone_secondary) : '',
       address: profile.data.address, district: profile.data.district,
       latitude: Number(profile.data.latitude), longitude: Number(profile.data.longitude),
+      sms_notifications_enabled: profile.data.sms_notifications_enabled,
     })
   }, [profile.data, reset])
   useEffect(() => {
@@ -678,6 +682,7 @@ function ShopProfilePage({ t }: { t: Copy }) {
       <div className="shop-map-heading"><div><span className="shop-eyebrow">{t('location')}</span><p>{t('chooseOnMap')}</p></div><span>{Number(latitude).toFixed(6)}, {Number(longitude).toFixed(6)}</span></div>
       {gpsError && <div className="shop-form-error" role="alert">{t('gpsError')}</div>}
       <Suspense fallback={<div className="shop-map-loading">Xarita yuklanmoqda…</div>}><LocationPicker key={profile.data?.id ?? 'new-shop'} latitude={center[0]} longitude={center[1]} onChange={chooseLocation} /></Suspense>
+      {profile.data && <label className="shop-sms-toggle"><input type="checkbox" {...register('sms_notifications_enabled')} /><span><strong>{t('smsNotifications')}</strong><small>{t('smsNotificationsHint')}</small></span></label>}
       <div className="shop-coordinate-fields"><label className="shop-field">Latitude<input type="number" step="0.000001" {...register('latitude', { valueAsNumber: true })} /></label><label className="shop-field">Longitude<input type="number" step="0.000001" {...register('longitude', { valueAsNumber: true })} /></label></div>
       {error && <div className="shop-form-error" role="alert">{error}</div>}{success && <div className="shop-form-success" role="status"><Check size={16} />{success}</div>}
       <button className="shop-primary-button" type="submit" disabled={isSubmitting}>{isSubmitting ? t('loading') : profile.data ? t('save') : t('createProfile')} <ArrowRight size={16} /></button>

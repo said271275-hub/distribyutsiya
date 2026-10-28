@@ -244,6 +244,8 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [restoreMode, setRestoreMode] = useState(false)
+  const [codeRequested, setCodeRequested] = useState(false)
+  const [loginCode, setLoginCode] = useState('')
   const [formError, setFormError] = useState('')
   const params = new URLSearchParams(location.search)
   const { control, register, handleSubmit, formState: { errors, isSubmitting } } =
@@ -257,9 +259,31 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
   const submit = handleSubmit(async (values) => {
     setFormError('')
     try {
+      if (!codeRequested) {
+        const path = restoreMode
+          ? '/auth/restore/otp/'
+          : staff
+            ? '/auth/staff/login/otp/'
+            : '/auth/login/otp/'
+        await api.post(path, {
+          phone: normalizePhone(values.phone),
+          password: values.password,
+        })
+        setCodeRequested(true)
+        return
+      }
+      if (!/^\d{6}$/.test(loginCode)) {
+        setFormError('6 xonali SMS kodni kiriting.')
+        return
+      }
       const signedInUser = restoreMode
-        ? await restore(normalizePhone(values.phone), values.password)
-        : await login(normalizePhone(values.phone), values.password, staff ? 'staff' : 'shop')
+        ? await restore(normalizePhone(values.phone), values.password, loginCode)
+        : await login(
+          normalizePhone(values.phone),
+          values.password,
+          staff ? 'staff' : 'shop',
+          loginCode,
+        )
       navigate(roleHomes[signedInUser.role], { replace: true })
     } catch (error) {
       setFormError(apiErrorMessage(error, 'Kirish amalga oshmadi. Ma’lumotlarni tekshiring.'))
@@ -274,10 +298,16 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
         <h2>{restoreMode ? 'Akkauntni tiklash' : staff ? 'Jamoa uchun kirish' : 'Hisobingizga kiring'}</h2>
         <p>
           {restoreMode
-            ? '30 kunlik muddat tugamagan bo‘lsa, akkauntingizni qayta faollashtiring.'
+            ? codeRequested
+              ? 'Telefoningizga yuborilgan 6 xonali kodni kiriting.'
+              : '30 kunlik muddat tugamagan bo‘lsa, parolingizni tekshirib tiklash kodi yuboramiz.'
             : staff
-              ? 'Kompaniya bergan telefon raqami va parolingizdan foydalaning.'
-              : 'Ishni davom ettirish uchun telefon raqamingizni kiriting.'}
+              ? codeRequested
+                ? 'Telefoningizga yuborilgan 6 xonali kodni kiriting.'
+                : 'Kompaniya bergan telefon raqami va parolingizdan foydalaning.'
+              : codeRequested
+                ? 'Telefoningizga yuborilgan 6 xonali kodni kiriting.'
+                : 'Telefon raqami va parolni kiriting; SMS-kod bilan tasdiqlaysiz.'}
         </p>
       </div>
 
@@ -309,17 +339,31 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
             />
           </span>
         </FormField>
+        {codeRequested && !restoreMode && (
+          <FormField label="SMS tasdiqlash kodi" hint="Kod 5 daqiqa amal qiladi">
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={loginCode}
+              onChange={(event) => setLoginCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="••••••"
+              className="form-input otp-input"
+            />
+          </FormField>
+        )}
         {formError && <div className="form-alert" role="alert">{formError}</div>}
         <button className="primary-button" disabled={isSubmitting} type="submit">
           {isSubmitting ? <span className="button-spinner" /> : null}
-          {isSubmitting ? 'Tekshirilmoqda…' : restoreMode ? 'Akkauntni tiklash' : 'Kirish'}
+          {isSubmitting ? 'Tekshirilmoqda…' : restoreMode ? codeRequested ? 'Akkauntni tiklash' : 'Tiklash kodi yuborish' : codeRequested ? 'Kirish' : 'SMS kod yuborish'}
           {!isSubmitting && <span aria-hidden="true">→</span>}
         </button>
       </form>
 
       <div className="auth-extra">
         {!staff && (
-          <button type="button" className="text-button" onClick={() => { setRestoreMode(!restoreMode); setFormError('') }}>
+          <button type="button" className="text-button" onClick={() => { setRestoreMode(!restoreMode); setCodeRequested(false); setLoginCode(''); setFormError('') }}>
             {restoreMode ? 'Kirish sahifasiga qaytish' : 'Akkauntni o‘chirishni bekor qilmoqchimisiz?'}
           </button>
         )}

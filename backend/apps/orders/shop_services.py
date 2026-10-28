@@ -8,6 +8,7 @@ from rest_framework.exceptions import ValidationError
 from apps.catalog.models import Product
 from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
 from apps.orders.models import Order, OrderItem, OrderStatusHistory
+from apps.orders.sms_notifications import queue_order_sms
 
 
 CENT = Decimal("0.01")
@@ -101,6 +102,7 @@ def create_shop_order(*, user, data, source_order=None) -> Order:
     order.full_clean()
     _replace_items(order, priced_items)
     OrderStatusHistory.objects.create(order=order, status=order.status, actor=user)
+    queue_order_sms(order, "received")
     return order
 
 

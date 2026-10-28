@@ -38,7 +38,12 @@ API’lari mavjud. Dispetcher oynasi va xarita bu bosqich doirasiga kirmaydi.
   `POST /api/auth/register/otp/` hamda `POST /api/auth/register/` manzillarida
   ro‘yxatdan o‘tadi.
 - Do‘kon egasi va xodim alohida manzillar orqali tizimga kiradi:
-  `/api/auth/login/` va `/api/auth/staff/login/`. Kompaniya boshqaruvchilari
+  avval `/api/auth/login/otp/` yoki `/api/auth/staff/login/otp/` orqali
+  parol tekshiriladi va kod yuboriladi, so‘ng kod
+  `/api/auth/login/` yoki `/api/auth/staff/login/` manzilida tasdiqlanadi.
+  Akkauntni qayta tiklash ham `/api/auth/restore/otp/` orqali kod oladi va
+  `/api/auth/restore/` orqali kodni tekshiradi.
+  Kompaniya boshqaruvchilari
   xodimlarni kirish huquqi talab qilinadigan `/api/v1/admin/staff/` manzillari
   orqali yaratadi va boshqaradi; xodimlar uchun ochiq o‘z-o‘zini ro‘yxatdan
   o‘tkazish manzili yo‘q.
@@ -50,10 +55,28 @@ API’lari mavjud. Dispetcher oynasi va xarita bu bosqich doirasiga kirmaydi.
 - Bir martalik kodni yetkazish usuli `OTP_PROVIDER` import yo‘li orqali
   tanlanadi. Ishlab chiqish usuli SMS yubormaydi; `DEV_OTP_ENABLED=True`
   bo‘lganda muhitdagi `DEV_OTP_CODE` qiymatini qabul qiladi. Bu sozlama
-  odatda o‘chiq va `DEBUG=False` bo‘lganda yoqilmaydi.
+  odatda o‘chiq va `DEBUG=False` bo‘lganda yoqilmaydi. Ishlab chiqarishda
+  `apps.accounts.sms.EskizOtpProvider` tanlanib, `ESKIZ_EMAIL`,
+  `ESKIZ_PASSWORD` va `ESKIZ_FROM` faqat muhit o‘zgaruvchilarida beriladi.
+  Eskiz tokeni avtomatik yangilanadi; maxfiy qiymatlar kodga yoki jurnalga
+  yozilmaydi.
+- Buyurtma SMS xabarlari tranzaksiya tasdiqlangandan so‘ng alohida ish
+  oqimida yuboriladi. Navbatdagi xabarlar va qayta urinishlar saqlanishi uchun
+  ishlab chiqarishda quyidagi buyruqni alohida xizmat sifatida uzluksiz
+  ishlating:
+
+  ```powershell
+  python manage.py process_sms_outbox --loop
+  ```
+
+  Do‘kon egasi profilidan buyurtma SMS xabarnomalarini o‘chirishi mumkin;
+  bir martalik kirish va ro‘yxatdan o‘tish kodlari bu sozlamaga bog‘liq emas.
+  Eskiz akkauntida shablon moderatsiyasi yoqilgan bo‘lsa, SMS matnlarini oldin
+  Eskiz tasdig‘idan o‘tkazing. Sinov akkaunti ishlab chiqarish matnlarini emas,
+  faqat Eskiz belgilagan sinov matnlarini qabul qilishi mumkin.
 - Muvaffaqiyatsiz besh kirish urinishidan so‘ng telefon va IP manzili
-  birikmasi 15 daqiqaga bloklanadi; ro‘yxatdan o‘tish kodi har bir telefon
-  raqamiga 15 daqiqada ko‘pi bilan uch marta yuboriladi.
+  birikmasi 15 daqiqaga bloklanadi; OTP kodi har bir telefon raqamiga
+  15 daqiqada ko‘pi bilan uch marta yuboriladi.
 - Hisobni o‘chirish so‘rovi joriy parol bilan tasdiqlanadi. Har kuni
   rejalashtiruvchidan `python manage.py process_account_deletions` buyrug‘ini
   ishga tushirib, 30 kunlik tiklash muddati tugagan so‘rovlar ma’lumotlarini

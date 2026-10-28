@@ -33,6 +33,10 @@ class LoginSerializer(serializers.Serializer):
         return normalize_uz_phone(value)
 
 
+class LoginOTPVerifySerializer(LoginSerializer):
+    code = serializers.RegexField(r"^\d{6}$", write_only=True)
+
+
 class UserSummarySerializer(serializers.ModelSerializer):
     company_id = serializers.IntegerField(read_only=True, allow_null=True)
 
@@ -87,5 +91,5 @@ class DeletionRequestSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
 
-class AccountRestoreSerializer(LoginSerializer):
+class AccountRestoreSerializer(LoginOTPVerifySerializer):
     pass
