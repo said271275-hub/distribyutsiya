@@ -15,12 +15,16 @@
   buyurtma holati SMS’lari, do‘konchi uchun bildirishnoma sozlamasi va
   xabarlarni navbatdan qayta yuborish qo‘shildi. Eskiz haqiqiy chaqiruvi
   maxfiy muhit sozlamalari va tasdiqlangan SMS matnlari mavjud bo‘lganda ishlaydi.
-- **6-bosqichning qolgan imkoniyatlari — bajarilmagan:** hisobotlar, takroriy
+- **6-bosqich, hisobotlar — bajarildi:** dispetcher/admin uchun yetkazilgan
+  savdo, bekor qilingan va muammoli buyurtmalar, qarzdorlar va oldindan
+  to‘lovlar, haydovchilar hamda mahsulotlar bo‘yicha o‘qish hisobotlari va
+  Excel’da ochiladigan CSV eksporti qo‘shildi.
+- **6-bosqichning qolgan imkoniyatlari — bajarilmagan:** takroriy
   buyurtmalar, ombor qoldig‘i, yetkazish isboti va ishlab chiqarishga chiqarish.
 
 ## Sinovlar va tekshirilmagan ishlar
 
-- So‘nggi tekshiruvda server sinovlaridan **118**, veb sinovlaridan **42** tasi muvaffaqiyatli o‘tdi.
+- So‘nggi tekshiruvda server sinovlaridan **123**, veb sinovlaridan **42** tasi muvaffaqiyatli o‘tdi.
 - Oxirgi buyurtmani takrorlash, dispetcherning buyurtmani boshqarish, reysni tuzish va 4C-3 sahifalarining to‘liq foydalanuvchi oqimlari uchun veb sinovlari yetishmaydi.
 - Haydovchi oynasining hozirgi ko‘rinishi bor, ammo haydovchining yetkazish amallari va oflayn sinxronlash tekshirilmagan, chunki ular hali yozilmagan.
 - Eskiz SMS provayderi mock bilan sinovdan o‘tkaziladi; haqiqiy SMS yuborish

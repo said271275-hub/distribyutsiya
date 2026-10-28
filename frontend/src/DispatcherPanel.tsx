@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock3,
+  FileText,
   LogOut,
   Moon,
   Package,
@@ -54,6 +55,7 @@ const DispatcherShopsPage = lazy(() => import('./DispatcherShopsPage'))
 const DispatcherFleetPage = lazy(() => import('./DispatcherFleetPage'))
 const DispatcherStaffPage = lazy(() => import('./DispatcherStaffPage'))
 const DispatcherFinancePage = lazy(() => import('./DispatcherFinancePage'))
+const DispatcherReportsPage = lazy(() => import('./DispatcherReportsPage'))
 
 type DashboardData = {
   date: string
@@ -181,7 +183,9 @@ function DispatcherPanel() {
                 ? 'Xodimlar'
                 : location.pathname.startsWith('/company/finance')
                   ? 'Qarz va to‘lov'
-                  : 'Umumiy ko‘rinish'
+                      : location.pathname.startsWith('/company/reports')
+                        ? 'Hisobotlar'
+                      : 'Umumiy ko‘rinish'
 
   return (
     <div className="dispatcher-shell">
@@ -212,6 +216,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/finance" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <Wallet size={18} strokeWidth={1.8} /><span>Qarz va to‘lov</span>
+          </NavLink>
+          <NavLink to="/company/reports" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <FileText size={18} strokeWidth={1.8} /><span>Hisobotlar</span>
           </NavLink>
           <NavLink to="/company/fleet" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <Truck size={18} strokeWidth={1.8} /><span>Mashinalar va haydovchilar</span>
@@ -248,6 +255,7 @@ function DispatcherPanel() {
             <Route path="catalog" element={<Suspense fallback={<LoadingState />}><DispatcherCatalogPage /></Suspense>} />
             <Route path="shops" element={<Suspense fallback={<LoadingState />}><DispatcherShopsPage /></Suspense>} />
             <Route path="finance" element={<Suspense fallback={<LoadingState />}><DispatcherFinancePage /></Suspense>} />
+            <Route path="reports" element={<Suspense fallback={<LoadingState />}><DispatcherReportsPage /></Suspense>} />
             <Route path="fleet" element={<Suspense fallback={<LoadingState />}><DispatcherFleetPage /></Suspense>} />
             <Route path="staff" element={<Suspense fallback={<LoadingState />}><DispatcherStaffPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/company" replace />} />
@@ -274,6 +282,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/finance" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <Wallet size={19} /><small>Hisob-kitob</small>
+          </NavLink>
+          <NavLink to="/company/reports" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
+            <FileText size={19} /><small>Hisobot</small>
           </NavLink>
           <NavLink to="/company/fleet" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <UserRound size={19} /><small>Transport</small>

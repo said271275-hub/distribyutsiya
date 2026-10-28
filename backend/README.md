@@ -148,6 +148,28 @@ turli birliklar aralashtirilmaydi va sig‘im noma’lum qoladi. Bitta to‘xtas
 yuk sig‘imdan oshsa, ogohlantirish beriladi; boshqa to‘xtashlar alohida
 takliflarga bo‘linadi.
 
+## 6-bosqich: boshqaruv hisobotlari
+
+Kompaniya boshqaruvchisi `/company/reports` oynasida kunlik savdo,
+qarzdorlar, haydovchilar va yetkazilgan mahsulotlar hisobotlarini ko‘radi.
+Har bir hisobot uchun bugun, 7 kun, 30 kun yoki o‘zi tanlagan sana oralig‘ini
+tanlash va Excel’da ochish uchun UTF-8 BOM bilan CSV faylini yuklab olish mumkin.
+Serverdagi faqat o‘qish uchun API:
+
+```text
+GET /api/v1/admin/reports/?report=sales&start_date=2026-10-01&end_date=2026-10-28
+GET /api/v1/admin/reports/?report=debtors&start_date=2026-10-01&end_date=2026-10-28
+GET /api/v1/admin/reports/?report=drivers&start_date=2026-10-01&end_date=2026-10-28
+GET /api/v1/admin/reports/?report=products&start_date=2026-10-01&end_date=2026-10-28
+```
+
+`export=csv` parametri CSV faylini qaytaradi. Savdo va mahsulot summalari
+yetkazilgan miqdor hamda buyurtmada saqlangan birlik narxidan hisoblanadi.
+Qarzdorlar hisoboti `ShopBalance` joriy qoldig‘ini ko‘rsatadi; manfiy saldo
+alohida oldindan to‘lovlar ro‘yxatida turadi. Shu sababli sana oralig‘i qarz
+qoldig‘ini tarixiy sanaga qaytarmaydi. Hisobot endpointlari kompaniya doirasida
+cheklangan va ma’lumotlarni o‘zgartirmaydi.
+
 Yo‘nalish hisoblash sozlamalari:
 
 | Muhit o‘zgaruvchisi | Standart qiymat | Vazifasi |

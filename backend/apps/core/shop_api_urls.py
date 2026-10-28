@@ -13,6 +13,7 @@ from apps.core.admin_api import (
     StaffAdminViewSet,
     VehicleAdminViewSet,
 )
+from apps.core.reports_api import AdminReportsView
 from apps.logistics.trips_api import (
     DashboardView,
     DriverTripListView,
@@ -47,6 +48,7 @@ admin_router.register("trips", TripAdminViewSet, basename="admin-trips")
 
 
 urlpatterns = [
+    path("admin/reports/", AdminReportsView.as_view(), name="admin-reports"),
     path("admin/", include(admin_router.urls)),
     path("shop/profile/", ShopProfileView.as_view(), name="shop-profile"),
     path("shop/companies/", ShopCompanyListView.as_view(), name="shop-companies"),
