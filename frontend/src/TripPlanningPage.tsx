@@ -17,6 +17,7 @@ import {
   type OrderStatus,
 } from './dispatcherUtils'
 import type { MapStop } from './DispatcherMap'
+import './InventoryWarnings.css'
 import './TripProgress.css'
 
 const DispatcherMap = lazy(() => import('./DispatcherMap'))
@@ -89,6 +90,13 @@ type Trip = {
   status: string
   routing_source: string
   stops: TripStop[]
+  stock_warnings: Array<{
+    product_id: number
+    product_name: string
+    required_quantity: string
+    available_quantity: string
+    message: string
+  }>
 }
 
 function tomorrow() {
@@ -503,6 +511,16 @@ export default function TripPlanningPage() {
             <span>Haydovchi: {savedTrip.driver_phone}</span>
             <span>Yo‘nalish: {savedTrip.routing_source === 'osrm' ? 'OSRM' : 'zaxira hisob'}</span>
           </div>
+          {savedTrip.stock_warnings.length > 0 && (
+            <div className="dispatcher-stock-warnings" role="status">
+              {savedTrip.stock_warnings.map((warning) => (
+                <p key={warning.product_id}>
+                  <AlertTriangle size={15} />
+                  <strong>{warning.product_name}:</strong> {warning.message}
+                </p>
+              ))}
+            </div>
+          )}
           <Suspense fallback={<div className="dispatcher-loading">Xarita yuklanmoqda…</div>}>
             <DispatcherMap stops={savedTrip.stops} />
           </Suspense>

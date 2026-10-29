@@ -23,6 +23,8 @@ from apps.accounts.models import User
 from apps.audit.models import AuditLog
 from apps.companies.models import Company, CompanyShopLink, Shop
 from apps.core.admin_api import audit, company_for_request, transition_order
+from apps.core.inventory import release_trip_inventory, reserve_order_inventory
+from apps.core.models import ProductStock
 from apps.core.permissions import CompanyAdminPermission, DriverPermission
 from apps.logistics.models import (
     DriverActionReceipt,
@@ -141,14 +143,56 @@ class TripOutputSerializer(serializers.ModelSerializer):
         source="driver.user.phone", read_only=True
     )
     stops = TripStopOutputSerializer(many=True, read_only=True)
+    stock_warnings = serializers.SerializerMethodField()
 
     class Meta:
         model = Trip
         fields = (
             "id", "company_id", "date", "vehicle_id", "vehicle_name",
             "vehicle_capacity", "driver_id", "driver_phone", "status",
-            "routing_source", "stops", "created_at", "updated_at",
+            "routing_source", "stops", "stock_warnings", "created_at", "updated_at",
         )
+
+    def get_stock_warnings(self, trip) -> list[dict]:
+        if trip.status != Trip.Status.PLANNED:
+            return []
+        required_rows = list(
+            OrderItem.objects.filter(
+                order__trip_stop_links__trip_stop__trip=trip
+            )
+            .values("product_id", "product__name")
+            .annotate(required_quantity=Sum("quantity"))
+            .order_by("product_id")
+        )
+        if not required_rows:
+            return []
+        stock_rows = ProductStock.objects.filter(
+            company=trip.company,
+            product_id__in=[row["product_id"] for row in required_rows],
+        ).values_list("product_id", "current_quantity", "reserved_quantity")
+        stock_by_product = {
+            product_id: (current, reserved)
+            for product_id, current, reserved in stock_rows
+        }
+        warnings = []
+        for row in required_rows:
+            current, reserved = stock_by_product.get(
+                row["product_id"], (Decimal("0.00"), Decimal("0.00"))
+            )
+            available = current - reserved
+            required = row["required_quantity"]
+            if required > available:
+                warnings.append({
+                    "product_id": row["product_id"],
+                    "product_name": row["product__name"],
+                    "required_quantity": format(required, ".2f"),
+                    "available_quantity": format(available, ".2f"),
+                    "message": (
+                        f"Omborda yetarli emas: kerak {format(required, '.2f')}, "
+                        f"bor {format(available, '.2f')}"
+                    ),
+                })
+        return warnings
 
 
 class DriverTripOrderItemSerializer(serializers.ModelSerializer):
@@ -975,7 +1019,10 @@ class TripAdminViewSet(viewsets.ViewSet):
     @action(detail=True, methods=("post",), url_path="confirm")
     @transaction.atomic
     def confirm(self, request, pk=None):
-        trip = self._get_trip(pk)
+        trip = get_object_or_404(
+            Trip.objects.select_for_update().filter(company=self.company),
+            pk=pk,
+        )
         if trip.status != Trip.Status.PLANNED:
             raise ValidationError({"trip": "Faqat rejalashtirilgan reysni tasdiqlash mumkin."})
         if not trip.stops.exists():
@@ -983,18 +1030,32 @@ class TripAdminViewSet(viewsets.ViewSet):
         serializer = TripConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         links = list(
-            TripStopOrder.objects.filter(trip_stop__trip=trip)
+            TripStopOrder.objects.select_for_update().filter(trip_stop__trip=trip)
             .select_related("order").order_by("trip_stop__sequence", "order_id")
         )
         order_ids = [link.order_id for link in links]
         if len(order_ids) != len(set(order_ids)):
             raise ValidationError({"trip": "Buyurtma reysda takrorlangan."})
+        locked_orders = {
+            order.pk: order
+            for order in Order.objects.select_for_update().filter(
+                pk__in=order_ids
+            ).order_by("pk")
+        }
         for link in links:
-            order = link.order
+            order = locked_orders[link.order_id]
             if order.company_id != trip.company_id or order.shop_id != link.trip_stop.shop_id:
                 raise ValidationError({"trip": "Reysdagi buyurtma kompaniya yoki do‘koniga mos emas."})
             if order.delivery_date != trip.date:
                 raise ValidationError({"trip": "Buyurtma va reys sanasi mos bo‘lishi kerak."})
+            if TripStopOrder.objects.filter(
+                order=order,
+                trip_stop__trip__status__in=(
+                    Trip.Status.CONFIRMED,
+                    Trip.Status.IN_PROGRESS,
+                ),
+            ).exclude(trip_stop__trip=trip).exists():
+                raise ValidationError({"trip": "Buyurtma boshqa tasdiqlangan reysga biriktirilgan."})
             if order.status == Order.Status.NEW:
                 transition_order(
                     order=order,
@@ -1007,6 +1068,8 @@ class TripAdminViewSet(viewsets.ViewSet):
                 )
             elif order.status != Order.Status.CONFIRMED:
                 raise ValidationError({"trip": "Faqat yangi yoki tasdiqlangan buyurtmalarni reysga tasdiqlash mumkin."})
+        for order_id in order_ids:
+            reserve_order_inventory(order=locked_orders[order_id], trip=trip)
         source = calculate_trip_route(trip)
         for link in (
             TripStopOrder.objects.filter(trip_stop__trip=trip)
@@ -1031,17 +1094,27 @@ class TripAdminViewSet(viewsets.ViewSet):
     @action(detail=True, methods=("post",), url_path="cancel")
     @transaction.atomic
     def cancel(self, request, pk=None):
-        trip = self._get_trip(pk)
+        trip = get_object_or_404(
+            Trip.objects.select_for_update().filter(company=self.company),
+            pk=pk,
+        )
         if trip.status not in (Trip.Status.PLANNED, Trip.Status.CONFIRMED):
             raise ValidationError({"trip": "Faqat rejalashtirilgan yoki tasdiqlangan reys bekor qilinadi."})
         serializer = TripCancelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         before = {
             "status": trip.status,
-            "order_ids": list(
-                TripStopOrder.objects.filter(trip_stop__trip=trip).values_list("order_id", flat=True)
-            ),
+            "order_ids": [],
         }
+        links = list(
+            TripStopOrder.objects.select_for_update()
+            .filter(trip_stop__trip=trip)
+            .select_related("order")
+            .order_by("order_id")
+        )
+        before["order_ids"] = [link.order_id for link in links]
+        for link in links:
+            release_trip_inventory(trip=trip, order=link.order)
         trip.status = Trip.Status.CANCELLED
         trip.save(update_fields=("status", "updated_at"))
         trip.stops.all().delete()
@@ -1245,6 +1318,7 @@ class DriverStopDeliveredView(APIView):
                 actor=request.user,
                 target=Order.Status.DELIVERED,
                 reason="Haydovchi do‘konga yetkazdi",
+                inventory_trip=trip,
             )
 
         stop.delivered_at = timezone.now()
@@ -1434,6 +1508,7 @@ class DriverStopIssueView(APIView):
                         for item in items
                     ],
                     notify_sms=not is_partial_order,
+                    inventory_trip=trip,
                 )
                 if is_partial_order:
                     partial_order_ids.append(order.pk)
@@ -1452,6 +1527,9 @@ class DriverStopIssueView(APIView):
                 raise ValidationError({
                     "delivered_orders": "Qisman yetkazishda miqdor buyurtma miqdoridan kam bo‘lishi kerak."
                 })
+
+        for link in links:
+            release_trip_inventory(trip=trip, order=link.order)
 
         event = {
             "reason": values["reason"],

@@ -5,6 +5,8 @@ from apps.catalog.shop_api import ShopCatalogView
 from apps.core.admin_api import (
     DriverAdminViewSet,
     BalanceAdminViewSet,
+    InventoryAdminViewSet,
+    InventoryEntryAdminViewSet,
     OrderAdminViewSet,
     PaymentAdminViewSet,
     ProductAdminViewSet,
@@ -50,6 +52,12 @@ admin_router.register("drivers", DriverAdminViewSet, basename="admin-drivers")
 admin_router.register("staff", StaffAdminViewSet, basename="admin-staff")
 admin_router.register("payments", PaymentAdminViewSet, basename="admin-payments")
 admin_router.register("balances", BalanceAdminViewSet, basename="admin-balances")
+admin_router.register("inventory", InventoryAdminViewSet, basename="admin-inventory")
+admin_router.register(
+    "inventory-entries",
+    InventoryEntryAdminViewSet,
+    basename="admin-inventory-entries",
+)
 admin_router.register("trips", TripAdminViewSet, basename="admin-trips")
 
 

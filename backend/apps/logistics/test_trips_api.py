@@ -5,6 +5,7 @@ from unittest.mock import patch
 from urllib.error import URLError
 
 from django.test import TestCase, override_settings
+from django.db.models import Sum
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -12,6 +13,8 @@ from apps.accounts.models import User
 from apps.audit.models import AuditLog
 from apps.catalog.models import Product
 from apps.companies.models import Company, CompanyShopLink, Shop
+from apps.core.inventory import record_inventory_entry
+from apps.core.models import InventoryEntry, ProductStock
 from apps.logistics.models import DriverProfile, Trip, TripStop, TripStopOrder, Vehicle
 from apps.logistics.routing import nearest_neighbor_order
 from apps.orders.models import Order, OrderItem, OrderStatusHistory, SmsOutbox
@@ -172,6 +175,22 @@ class TripApiTests(TestCase):
             {"shop_id": shop.pk, "order_ids": order_ids},
             format="json",
         )
+
+    def assert_inventory_ledger_matches(self):
+        stocks = ProductStock.objects.filter(company=self.company)
+        for stock in stocks:
+            totals = InventoryEntry.objects.filter(
+                company=stock.company, product=stock.product
+            ).aggregate(
+                quantity=Sum("quantity_delta"),
+                reserved=Sum("reserved_delta"),
+            )
+            self.assertEqual(
+                stock.current_quantity, totals["quantity"] or Decimal("0.00")
+            )
+            self.assertEqual(
+                stock.reserved_quantity, totals["reserved"] or Decimal("0.00")
+            )
 
     def test_trip_create_rejects_foreign_company_vehicle(self):
         response = self.client.post(
@@ -499,6 +518,68 @@ class TripApiTests(TestCase):
             actor=self.admin, action="trip.confirm", entity_id=str(trip.pk)
         ).exists())
 
+    def test_confirm_reserves_stock_and_shows_shortage_without_blocking_trip(self):
+        order = self.make_order(quantity="2.00", order_status=Order.Status.NEW)
+        trip = self.create_trip()
+        self.add_stop(trip, self.shop, [order.pk])
+
+        planned = self.client.get(f"/api/v1/admin/trips/{trip.pk}/")
+        self.assertEqual(planned.status_code, 200, planned.data)
+        self.assertEqual(
+            planned.data["stock_warnings"][0]["message"],
+            "Omborda yetarli emas: kerak 2.00, bor 0.00",
+        )
+
+        confirmed = self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+        self.assertEqual(confirmed.status_code, 200, confirmed.data)
+        stock = ProductStock.objects.get(company=self.company, product=self.product)
+        self.assertEqual(stock.current_quantity, Decimal("0.00"))
+        self.assertEqual(stock.reserved_quantity, Decimal("2.00"))
+        self.assertEqual(confirmed.data["stock_warnings"], [])
+        self.assertEqual(
+            InventoryEntry.objects.filter(
+                order=order, entry_type=InventoryEntry.Type.RESERVATION
+            ).count(),
+            1,
+        )
+        self.assert_inventory_ledger_matches()
+
+    def test_cancelling_confirmed_trip_releases_reserved_stock(self):
+        record_inventory_entry(
+            company=self.company,
+            product=self.product,
+            entry_type=InventoryEntry.Type.RECEIPT,
+            quantity_delta=Decimal("5.00"),
+            reason="Sinov kirimi",
+        )
+        order = self.make_order(quantity="2.00")
+        trip = self.create_trip()
+        self.add_stop(trip, self.shop, [order.pk])
+        self.assertEqual(
+            self.client.post(
+                f"/api/v1/admin/trips/{trip.pk}/confirm/",
+                {"reason": "Reys tasdiqlandi"},
+                format="json",
+            ).status_code,
+            200,
+        )
+
+        cancelled = self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/cancel/",
+            {"reason": "Reys bekor qilindi"},
+            format="json",
+        )
+        self.assertEqual(cancelled.status_code, 200, cancelled.data)
+        stock = ProductStock.objects.get(company=self.company, product=self.product)
+        self.assertEqual(stock.current_quantity, Decimal("5.00"))
+        self.assertEqual(stock.reserved_quantity, Decimal("0.00"))
+        self.assertEqual(Order.objects.get(pk=order.pk).status, Order.Status.CONFIRMED)
+        self.assert_inventory_ledger_matches()
+
     def test_confirmed_trip_eta_is_exposed_to_shop_owner_order_api(self):
         order = self.make_order(order_status=Order.Status.NEW)
         trip = self.create_trip()
@@ -798,6 +879,16 @@ class TripApiTests(TestCase):
             ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
             Decimal("2000.00"),
         )
+        stock = ProductStock.objects.get(company=self.company, product=self.product)
+        self.assertEqual(stock.current_quantity, Decimal("-3.00"))
+        self.assertEqual(stock.reserved_quantity, Decimal("0.00"))
+        self.assertEqual(
+            InventoryEntry.objects.filter(
+                entry_type=InventoryEntry.Type.DELIVERY
+            ).count(),
+            3,
+        )
+        self.assert_inventory_ledger_matches()
 
         self.client.force_authenticate(self.admin)
         dispatcher_trip = self.client.get(f"/api/v1/admin/trips/{trip.pk}/")
@@ -833,6 +924,16 @@ class TripApiTests(TestCase):
             ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
             Decimal("1000.00"),
         )
+        self.assertEqual(
+            InventoryEntry.objects.filter(
+                order=order, entry_type=InventoryEntry.Type.DELIVERY
+            ).count(),
+            1,
+        )
+        stock = ProductStock.objects.get(company=self.company, product=self.product)
+        self.assertEqual(stock.current_quantity, Decimal("-1.00"))
+        self.assertEqual(stock.reserved_quantity, Decimal("0.00"))
+        self.assert_inventory_ledger_matches()
 
     def test_driver_issue_is_scoped_to_own_trip_and_stop(self):
         own_trip = self.create_trip()
@@ -943,6 +1044,10 @@ class TripApiTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.IN_TRANSIT)
         self.assertFalse(BalanceEntry.objects.filter(order=order).exists())
+        stock = ProductStock.objects.get(company=self.company, product=self.product)
+        self.assertEqual(stock.current_quantity, Decimal("0.00"))
+        self.assertEqual(stock.reserved_quantity, Decimal("0.00"))
+        self.assert_inventory_ledger_matches()
 
         self.client.force_authenticate(self.admin)
         dispatcher = self.client.get("/api/v1/admin/trips/")
@@ -992,6 +1097,13 @@ class TripApiTests(TestCase):
         self.assertEqual(conflict.status_code, 409, conflict.data)
 
     def test_partial_delivery_records_entered_quantity_and_uses_existing_ledger_rule(self):
+        record_inventory_entry(
+            company=self.company,
+            product=self.product,
+            entry_type=InventoryEntry.Type.RECEIPT,
+            quantity_delta=Decimal("5.00"),
+            reason="Sinov kirimi",
+        )
         order = self.make_order(quantity="2.00")
         untouched_order = self.make_order(quantity="1.00")
         trip = self.create_trip()
@@ -1061,6 +1173,10 @@ class TripApiTests(TestCase):
         self.assertEqual(order.status, Order.Status.DELIVERED)
         self.assertEqual(item.delivered_quantity, Decimal("1.25"))
         self.assertEqual(untouched_order.status, Order.Status.IN_TRANSIT)
+        stock = ProductStock.objects.get(company=self.company, product=self.product)
+        self.assertEqual(stock.current_quantity, Decimal("3.75"))
+        self.assertEqual(stock.reserved_quantity, Decimal("0.00"))
+        self.assert_inventory_ledger_matches()
         self.assertTrue(
             SmsOutbox.objects.filter(
                 order=order,

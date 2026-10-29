@@ -27,6 +27,10 @@ class CompanyAdminPermission(RolePermission):
     allowed_roles = (User.Role.SUPER_ADMIN, User.Role.COMPANY_ADMIN)
 
 
+class InventoryAdminPermission(RolePermission):
+    allowed_roles = (User.Role.COMPANY_ADMIN,)
+
+
 class DriverPermission(RolePermission):
     allowed_roles = (User.Role.DRIVER,)
 

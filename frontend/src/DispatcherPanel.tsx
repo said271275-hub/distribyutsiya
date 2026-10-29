@@ -56,6 +56,7 @@ const DispatcherFleetPage = lazy(() => import('./DispatcherFleetPage'))
 const DispatcherStaffPage = lazy(() => import('./DispatcherStaffPage'))
 const DispatcherFinancePage = lazy(() => import('./DispatcherFinancePage'))
 const DispatcherReportsPage = lazy(() => import('./DispatcherReportsPage'))
+const InventoryPage = lazy(() => import('./InventoryPage'))
 
 type DashboardData = {
   date: string
@@ -175,6 +176,8 @@ function DispatcherPanel() {
         ? 'Yuklash ro‘yxati'
         : location.pathname.startsWith('/company/catalog')
           ? 'Mahsulotlar va narxlar'
+          : location.pathname.startsWith('/company/inventory')
+            ? 'Ombor'
           : location.pathname.startsWith('/company/shops')
             ? 'Do‘konlar'
             : location.pathname.startsWith('/company/fleet')
@@ -210,6 +213,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/catalog" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <Tags size={18} strokeWidth={1.8} /><span>Mahsulotlar va narxlar</span>
+          </NavLink>
+          <NavLink to="/company/inventory" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <Package size={18} strokeWidth={1.8} /><span>Ombor</span>
           </NavLink>
           <NavLink to="/company/shops" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <MapPin size={18} strokeWidth={1.8} /><span>Do‘konlar</span>
@@ -256,6 +262,7 @@ function DispatcherPanel() {
             <Route path="shops" element={<Suspense fallback={<LoadingState />}><DispatcherShopsPage /></Suspense>} />
             <Route path="finance" element={<Suspense fallback={<LoadingState />}><DispatcherFinancePage /></Suspense>} />
             <Route path="reports" element={<Suspense fallback={<LoadingState />}><DispatcherReportsPage /></Suspense>} />
+            <Route path="inventory" element={<Suspense fallback={<LoadingState />}><InventoryPage /></Suspense>} />
             <Route path="fleet" element={<Suspense fallback={<LoadingState />}><DispatcherFleetPage /></Suspense>} />
             <Route path="staff" element={<Suspense fallback={<LoadingState />}><DispatcherStaffPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/company" replace />} />
@@ -276,6 +283,9 @@ function DispatcherPanel() {
           </NavLink>
           <NavLink to="/company/catalog" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <Tags size={19} /><small>Mahsulotlar</small>
+          </NavLink>
+          <NavLink to="/company/inventory" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
+            <Package size={19} /><small>Ombor</small>
           </NavLink>
           <NavLink to="/company/shops" className={({ isActive }) => isActive ? 'dispatcher-mobile-active' : ''}>
             <MapPin size={19} /><small>Do‘konlar</small>

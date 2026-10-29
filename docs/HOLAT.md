@@ -26,18 +26,29 @@
   `create_recurring_orders` buyrug‘i dublikat yaratmaydi, tasdiqlash esa amaldagi
   narx va chegirmani, kompaniya aloqasini hamda buyurtma vaqt chegarasini qayta
   tekshiradi.
-- **6-bosqichning qolgan imkoniyatlari — bajarilmagan:** ombor qoldig‘i,
-  yetkazish isboti va ishlab chiqarishga chiqarish.
+- **6-bosqich, ombor hisobi — bajarildi:** mahsulot qoldig‘i o‘chirilmaydigan
+  harakatlar jurnalidan hisoblanadi, tezkor qoldiq esa jurnal yig‘indisiga mos
+  yangilanadi. Dispetcher kirim, chiqim va sababli tuzatish kiritadi, mahsulot
+  harakatlarini ko‘radi va xato yozuvni teskari yozuv bilan tuzatadi. Minimal
+  qoldiq ogohlantirishi hamda reys tasdiqlashdagi zaxira, yetkazilgan miqdor
+  chiqimi, yetkazilmagan qismni va muammoli/bekor qilingan reysdagi zaxirani
+  qaytarish qo‘shildi.
+- **6-bosqichning qolgan imkoniyatlari — bajarilmagan:** yetkazish isboti va
+  ishlab chiqarishga chiqarish.
 
 ## Sinovlar va tekshirilmagan ishlar
 
-- Takroriy buyurtmalar uchun maqsadli server sinovlaridan **13** tasi va veb
-  sinovlaridan **42** tasi muvaffaqiyatli o‘tdi; veb to‘plami yig‘ilishi ham o‘tdi.
-- Barcha server sinovlarida **140** sinovdan **139** tasi o‘tdi. Yagona
-  muvaffaqiyatsiz sinov — hisobotlardagi mavjud
-  `test_discounted_sales_total_matches_posted_delivery_debits` tekshiruvi; u
-  `3500.00` o‘rniga `3500` matn formatini kutgan. Bu vazifada hisobot kodi
-  o‘zgartirilmadi.
+- Ombor va reys oqimi bo‘yicha maqsadli server sinovlaridan **31** tasi o‘tdi.
+  Veb sinovlaridan **44** tasi o‘tdi va veb to‘plami yig‘ildi.
+- To‘liq server sinovlarida **150** ta topilib, **146** tasi bajarildi; **8**
+  xato bilan yakunlandi. Ulardan biri hisobot sinovining 18:00 buyurtma
+  chegarasidan keyin bajarilganidir; yana biri mavjud `reset_dev_users`
+  sinovidagi mahsulot berilmagan buyurtma bandidir. Qolgan **6** xato takroriy
+  buyurtma va SMS sinovlarida PostgreSQL’ning `FOR UPDATE` so‘rovidagi mavjud
+  tashqi ulanish cheklovidan kelib chiqdi. Ombor/reys maqsadli sinovlari to‘liq
+  o‘tdi.
+- Veb tekshiruv vositasi avvaldan mavjud to‘rtta ogohlantirishni ko‘rsatdi;
+  yangi ombor sahifasi bo‘yicha ogohlantirish chiqmadi.
 - Oxirgi buyurtmani takrorlash, dispetcherning buyurtmani boshqarish, reysni tuzish va 4C-3 sahifalarining to‘liq foydalanuvchi oqimlari uchun veb sinovlari yetishmaydi.
 - Haydovchi oynasining hozirgi ko‘rinishi bor, ammo haydovchining yetkazish amallari va oflayn sinxronlash tekshirilmagan, chunki ular hali yozilmagan.
 - Eskiz SMS provayderi mock bilan sinovdan o‘tkaziladi; haqiqiy SMS yuborish

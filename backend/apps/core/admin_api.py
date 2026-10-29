@@ -21,7 +21,14 @@ from apps.accounts.models import User
 from apps.audit.models import AuditLog
 from apps.catalog.models import ContainerMovement, Product
 from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
-from apps.core.permissions import CompanyAdminPermission
+from apps.core.inventory import (
+    cancel_order_inventory,
+    deliver_order_inventory,
+    record_inventory_entry,
+    reverse_inventory_entry,
+)
+from apps.core.models import InventoryEntry, ProductStock
+from apps.core.permissions import CompanyAdminPermission, InventoryAdminPermission
 from apps.logistics.models import DriverProfile, Trip, Vehicle
 from apps.orders.models import Order, OrderStatusHistory
 from apps.orders.sms_notifications import queue_order_sms
@@ -104,6 +111,7 @@ def transition_order(
     allow_credit_limit_exceeded=False,
     delivered_items=None,
     notify_sms=True,
+    inventory_trip=None,
 ):
     order = Order.objects.select_for_update().select_related("shop", "company").get(pk=order.pk)
     previous = order.status
@@ -113,21 +121,24 @@ def transition_order(
         raise ValidationError({"reason": "Holat o‘zgarishi sababini kiriting."})
 
     delivery_total = Decimal("0.00")
+    delivered_quantities = None
     if target == Order.Status.DELIVERED:
         items = list(order.items.select_for_update().order_by("pk"))
         if delivered_items is None:
-            quantities = {item.pk: item.quantity for item in items}
+            delivered_quantities = {item.pk: item.quantity for item in items}
         else:
-            quantities = {item["item_id"]: item["quantity"] for item in delivered_items}
-            if len(quantities) != len(delivered_items):
+            delivered_quantities = {
+                item["item_id"]: item["quantity"] for item in delivered_items
+            }
+            if len(delivered_quantities) != len(delivered_items):
                 raise ValidationError({"delivered_items": "Buyurtma bandini takrorlamang."})
-            if set(quantities) != {item.pk for item in items}:
+            if set(delivered_quantities) != {item.pk for item in items}:
                 raise ValidationError({
                     "delivered_items": "Har bir buyurtma bandi uchun yetkazilgan miqdorni yuboring."
                 })
 
         for item in items:
-            quantity = quantities[item.pk]
+            quantity = delivered_quantities[item.pk]
             if quantity > item.quantity:
                 raise ValidationError({
                     "delivered_items": "Yetkazilgan miqdor buyurtma miqdoridan oshmasligi kerak."
@@ -137,7 +148,7 @@ def transition_order(
             delivery_total += (quantity * item.unit_price).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
-        if not any(quantities.values()):
+        if not any(delivered_quantities.values()):
             raise ValidationError({
                 "delivered_items": "Yetkazilgan mahsulot miqdori noldan katta bo‘lishi kerak."
             })
@@ -165,6 +176,12 @@ def transition_order(
         actor=actor,
         note=reason[:500],
     )
+    if target == Order.Status.DELIVERED:
+        deliver_order_inventory(
+            order=order,
+            delivered_quantities=delivered_quantities,
+            trip=inventory_trip,
+        )
     if target == Order.Status.DELIVERED and delivery_total > 0:
         entry = BalanceEntry.objects.create(
             company=order.company,
@@ -197,6 +214,7 @@ def transition_order(
                 note=f"Buyurtma #{order.pk} bekor qilindi",
             )
             entry.post()
+        cancel_order_inventory(order=order, reason=reason)
     audit(actor, order.company, f"order.{target}", order, {"status": previous}, order_state(order))
     if notify_sms and target == Order.Status.CONFIRMED:
         queue_order_sms(order, "confirmed")
@@ -1179,3 +1197,351 @@ class BalanceAdminViewSet(viewsets.ReadOnlyModelViewSet):
             "note": entry.note,
         })
         return Response(BalanceEntryOutputSerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class InventoryStockSerializer(serializers.ModelSerializer):
+    product_id = serializers.IntegerField(source="pk", read_only=True)
+    product_name = serializers.CharField(source="name", read_only=True)
+    unit = serializers.CharField(read_only=True)
+    current_quantity = serializers.SerializerMethodField()
+    reserved_quantity = serializers.SerializerMethodField()
+    available_quantity = serializers.SerializerMethodField()
+    minimum_quantity = serializers.SerializerMethodField()
+    is_low_stock = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = (
+            "product_id",
+            "product_name",
+            "unit",
+            "current_quantity",
+            "reserved_quantity",
+            "available_quantity",
+            "minimum_quantity",
+            "is_low_stock",
+        )
+
+    def _stock(self, product):
+        stocks = getattr(product, "company_stock_records", ())
+        return stocks[0] if stocks else None
+
+    @extend_schema_field(serializers.CharField())
+    def get_current_quantity(self, product):
+        stock = self._stock(product)
+        return format(stock.current_quantity if stock else Decimal("0.00"), ".2f")
+
+    @extend_schema_field(serializers.CharField())
+    def get_reserved_quantity(self, product):
+        stock = self._stock(product)
+        return format(stock.reserved_quantity if stock else Decimal("0.00"), ".2f")
+
+    @extend_schema_field(serializers.CharField())
+    def get_available_quantity(self, product):
+        stock = self._stock(product)
+        value = stock.current_quantity - stock.reserved_quantity if stock else Decimal("0.00")
+        return format(value, ".2f")
+
+    @extend_schema_field(serializers.CharField())
+    def get_minimum_quantity(self, product):
+        stock = self._stock(product)
+        return format(stock.minimum_quantity if stock else Decimal("0.00"), ".2f")
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_low_stock(self, product):
+        stock = self._stock(product)
+        return bool(
+            stock
+            and stock.minimum_quantity > 0
+            and stock.current_quantity - stock.reserved_quantity <= stock.minimum_quantity
+        )
+
+
+class InventoryEntrySerializer(serializers.ModelSerializer):
+    product_id = serializers.IntegerField(read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    unit = serializers.CharField(source="product.unit", read_only=True)
+    order_id = serializers.IntegerField(read_only=True)
+    trip_id = serializers.IntegerField(read_only=True)
+    reversal_of_id = serializers.IntegerField(read_only=True)
+    reversal_id = serializers.SerializerMethodField()
+    can_reverse = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InventoryEntry
+        fields = (
+            "id",
+            "product_id",
+            "product_name",
+            "unit",
+            "entry_type",
+            "quantity_delta",
+            "reserved_delta",
+            "batch_number",
+            "reason",
+            "occurred_at",
+            "order_id",
+            "trip_id",
+            "reversal_of_id",
+            "reversal_id",
+            "can_reverse",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_reversal_id(self, entry):
+        reversal = getattr(entry, "reversal", None)
+        return reversal.pk if reversal else None
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_can_reverse(self, entry):
+        return (
+            entry.order_id is None
+            and entry.trip_id is None
+            and entry.entry_type in (
+                InventoryEntry.Type.RECEIPT,
+                InventoryEntry.Type.ISSUE,
+                InventoryEntry.Type.ADJUSTMENT,
+            )
+            and self.get_reversal_id(entry) is None
+        )
+
+
+class InventoryReceiptInputSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
+    batch_number = serializers.CharField(max_length=120, allow_blank=True, required=False)
+    date = serializers.DateField()
+    note = serializers.CharField(max_length=400, allow_blank=True, required=False)
+
+
+class InventoryIssueInputSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
+    reason = serializers.CharField(trim_whitespace=True, max_length=400)
+
+    def validate_reason(self, value):
+        if not value:
+            raise serializers.ValidationError("Chiqim sababini kiriting.")
+        return value
+
+
+INVENTORY_ADJUSTMENT_REASONS = (
+    ("inventory", "Inventarizatsiya"),
+    ("damaged", "Brak"),
+    ("lost", "Yo‘qotish"),
+)
+
+
+class InventoryAdjustmentInputSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(min_value=1)
+    quantity_delta = serializers.DecimalField(max_digits=14, decimal_places=2)
+    reason = serializers.ChoiceField(choices=INVENTORY_ADJUSTMENT_REASONS)
+    note = serializers.CharField(max_length=400, allow_blank=True, required=False)
+
+    def validate_quantity_delta(self, value):
+        if value == 0:
+            raise serializers.ValidationError("Tuzatish miqdori noldan farqli bo‘lishi kerak.")
+        return value
+
+
+class InventoryMinimumInputSerializer(serializers.Serializer):
+    minimum_quantity = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.00")
+    )
+
+
+class InventoryReverseInputSerializer(serializers.Serializer):
+    reason = serializers.CharField(trim_whitespace=True, max_length=400)
+
+    def validate_reason(self, value):
+        if not value:
+            raise serializers.ValidationError("Teskari yozuv sababini kiriting.")
+        return value
+
+
+class InventoryAdminViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = (IsAuthenticated, InventoryAdminPermission)
+    serializer_class = InventoryStockSerializer
+    pagination_class = AdminPage
+    lookup_value_regex = r"\d+"
+
+    @property
+    def company(self):
+        return company_for_request(self.request)
+
+    def get_queryset(self):
+        company = self.company
+        return Product.objects.filter(
+            company=company, is_archived=False
+        ).order_by("name", "pk").prefetch_related(
+            Prefetch(
+                "stock_records",
+                queryset=ProductStock.objects.filter(company=company),
+                to_attr="company_stock_records",
+            )
+        )
+
+    @extend_schema(request=InventoryReceiptInputSerializer, responses={201: InventoryEntrySerializer})
+    @action(detail=False, methods=("post",), url_path="receipt")
+    @transaction.atomic
+    def receipt(self, request):
+        serializer = InventoryReceiptInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        product = get_object_or_404(
+            Product.objects.filter(company=self.company, is_archived=False),
+            pk=values["product_id"],
+        )
+        batch_number = values.get("batch_number", "").strip()
+        note = values.get("note", "").strip()
+        reason = "Kirim"
+        if batch_number:
+            reason += f", partiya {batch_number}"
+        if note:
+            reason += f": {note}"
+        occurred_at = timezone.make_aware(
+            datetime.combine(values["date"], time.min)
+        )
+        entry = record_inventory_entry(
+            company=self.company,
+            product=product,
+            entry_type=InventoryEntry.Type.RECEIPT,
+            quantity_delta=values["quantity"],
+            batch_number=batch_number,
+            reason=reason,
+            occurred_at=occurred_at,
+        )
+        audit(request.user, self.company, "inventory.receipt", entry, after={
+            "product_id": product.pk,
+            "quantity": entry.quantity_delta,
+            "batch_number": batch_number,
+            "date": values["date"],
+        })
+        return Response(InventoryEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=InventoryIssueInputSerializer, responses={201: InventoryEntrySerializer})
+    @action(detail=False, methods=("post",), url_path="issue")
+    @transaction.atomic
+    def issue(self, request):
+        serializer = InventoryIssueInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        product = get_object_or_404(
+            Product.objects.filter(company=self.company, is_archived=False),
+            pk=values["product_id"],
+        )
+        entry = record_inventory_entry(
+            company=self.company,
+            product=product,
+            entry_type=InventoryEntry.Type.ISSUE,
+            quantity_delta=-values["quantity"],
+            reason=values["reason"],
+        )
+        audit(request.user, self.company, "inventory.issue", entry, after={
+            "product_id": product.pk,
+            "quantity": values["quantity"],
+            "reason": entry.reason,
+        })
+        return Response(InventoryEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=InventoryAdjustmentInputSerializer, responses={201: InventoryEntrySerializer})
+    @action(detail=False, methods=("post",), url_path="adjustment")
+    @transaction.atomic
+    def adjustment(self, request):
+        serializer = InventoryAdjustmentInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        product = get_object_or_404(
+            Product.objects.filter(company=self.company, is_archived=False),
+            pk=values["product_id"],
+        )
+        reason_label = dict(INVENTORY_ADJUSTMENT_REASONS)[values["reason"]]
+        note = values.get("note", "").strip()
+        reason = reason_label if not note else f"{reason_label}: {note}"
+        entry = record_inventory_entry(
+            company=self.company,
+            product=product,
+            entry_type=InventoryEntry.Type.ADJUSTMENT,
+            quantity_delta=values["quantity_delta"],
+            reason=reason,
+        )
+        audit(request.user, self.company, "inventory.adjustment", entry, after={
+            "product_id": product.pk,
+            "quantity_delta": entry.quantity_delta,
+            "reason": entry.reason,
+        })
+        return Response(InventoryEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=InventoryMinimumInputSerializer, responses=InventoryStockSerializer)
+    @action(detail=True, methods=("patch",), url_path="minimum")
+    @transaction.atomic
+    def minimum(self, request, pk=None):
+        product = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = InventoryMinimumInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        product = Product.objects.select_for_update().get(
+            pk=product.pk, company=self.company
+        )
+        stock, _ = ProductStock.objects.get_or_create(
+            company=self.company, product=product
+        )
+        stock = ProductStock.objects.select_for_update().get(pk=stock.pk)
+        before = stock.minimum_quantity
+        stock.minimum_quantity = serializer.validated_data["minimum_quantity"]
+        stock.save(update_fields=("minimum_quantity", "updated_at"))
+        audit(request.user, self.company, "inventory.minimum", stock, {
+            "minimum_quantity": before,
+        }, {
+            "minimum_quantity": stock.minimum_quantity,
+        })
+        product.company_stock_records = [stock]
+        return Response(InventoryStockSerializer(product).data)
+
+
+class InventoryEntryAdminViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = (IsAuthenticated, InventoryAdminPermission)
+    queryset = InventoryEntry.objects.all()
+    serializer_class = InventoryEntrySerializer
+    pagination_class = AdminPage
+    lookup_value_regex = r"\d+"
+
+    @property
+    def company(self):
+        return company_for_request(self.request)
+
+    def get_queryset(self):
+        queryset = InventoryEntry.objects.filter(
+            company=self.company
+        ).select_related("product", "order", "trip", "reversal_of").prefetch_related("reversal")
+        product_id = self.request.query_params.get("product_id")
+        if product_id:
+            try:
+                product_id = int(product_id)
+            except ValueError as error:
+                raise ValidationError({"product_id": "Mahsulot raqami noto‘g‘ri."}) from error
+            queryset = queryset.filter(product_id=product_id)
+        return queryset
+
+    @extend_schema(request=InventoryReverseInputSerializer, responses={201: InventoryEntrySerializer})
+    @action(detail=True, methods=("post",), url_path="reverse")
+    @transaction.atomic
+    def reverse(self, request, pk=None):
+        serializer = InventoryReverseInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        original = get_object_or_404(self.get_queryset(), pk=pk)
+        entry = reverse_inventory_entry(
+            company=self.company,
+            entry_id=original.pk,
+            reason=serializer.validated_data["reason"],
+        )
+        audit(request.user, self.company, "inventory.reverse", entry, after={
+            "reversal_of_id": original.pk,
+            "reason": entry.reason,
+        })
+        return Response(InventoryEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
