@@ -56,6 +56,16 @@ export type ShopPriceRow = {
   discount_percent: string
 }
 
+export function buildProductFormData(values: ProductFormValues, image: File) {
+  const payload = buildProductPayload(values)
+  const formData = new FormData()
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== null) formData.append(key, String(value))
+  })
+  formData.append('image', image)
+  return formData
+}
+
 export function buildProductPayload(values: ProductFormValues): ProductPayload {
   return {
     name: values.name.trim(),

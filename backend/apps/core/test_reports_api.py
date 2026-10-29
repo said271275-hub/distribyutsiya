@@ -160,6 +160,21 @@ class AdminReportsApiTests(APITestCase):
         self.assertEqual(response.data["rows"][1]["cancelled_orders"], 1)
         self.assertEqual(response.data["rows"][1]["problem_orders"], 1)
 
+    def test_product_csv_uses_uzbek_name_and_unit(self):
+        order, _item = self._order()
+        self._history(order, Order.Status.DELIVERED, self.today)
+
+        response = self.client.get(self._url("products", export="csv"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("hisobot_mahsulotlar_", response["Content-Disposition"])
+        rows = list(csv.reader(StringIO(response.content.decode("utf-8-sig"))))
+        self.assertEqual(
+            rows[0],
+            ["Mahsulot", "Birlik", "Yetkazilgan miqdor", "Yetkazilgan summa"],
+        )
+        self.assertEqual(rows[1][1], "quti")
+
     def test_debtors_are_sorted_and_prepaid_shops_are_separate(self):
         ShopBalance.objects.create(
             company=self.company,

@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, Check, CheckCircle2, LogOut, MapPin, Phone, Truck } from 'lucide-react'
+import { CalendarDays, Check, CheckCircle2, LogOut, MapPin, Phone, RefreshCw, Truck } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api, { apiErrorMessage } from './api'
 import type { MapStop } from './DispatcherMap'
-import { getDriverTripProgress, sortDriverStops } from './driverTripUtils'
+import { canMarkStopDelivered, getDriverTripProgress, sortDriverStops } from './driverTripUtils'
 import { applyQueuedDriverAction } from './driverOfflineUtils'
 import {
   enqueueDriverActionWithTrips,
@@ -96,12 +96,12 @@ function tripStatusLabel(status: string) {
 }
 
 function formatIssueReason(reason: string) {
-  return driverIssueLabels[reason as DriverIssueReason] ?? reason
+  return driverIssueLabels[reason as DriverIssueReason] ?? 'Boshqa sabab'
 }
 
 function unitLabel(unit: string) {
   const labels: Record<string, string> = { piece: 'dona', box: 'quti', block: 'blok' }
-  return labels[unit] ?? unit
+  return labels[unit] ?? 'birlik'
 }
 
 export default function DriverPanel() {
@@ -467,7 +467,27 @@ export default function DriverPanel() {
                 </section>
 
                 <section className="driver-section">
-                  <div className="driver-section-heading"><div><span className="driver-eyebrow">KETMA-KETLIK BO‘YICHA</span><h2>Do‘konlar</h2></div><span className="driver-count">{selectedTrip.stops.length}</span></div>
+                  <div className="driver-section-heading">
+                    <div><span className="driver-eyebrow">KETMA-KETLIK BO‘YICHA</span><h2>Do‘konlar</h2></div>
+                    <div className="driver-stop-heading-actions">
+                      <button
+                        type="button"
+                        className="driver-refresh-trip"
+                        onClick={() => void tripsQuery.refetch()}
+                        disabled={tripsQuery.isFetching}
+                      >
+                        <RefreshCw size={14} className={tripsQuery.isFetching ? 'driver-refresh-spinning' : ''} />
+                        {tripsQuery.isFetching ? 'Yangilanmoqda…' : 'Reysni yangilash'}
+                      </button>
+                      <span className="driver-count">{selectedTrip.stops.length}</span>
+                    </div>
+                  </div>
+                  {!canMarkStopDelivered(selectedTrip.status) && selectedTrip.status !== 'completed' && (
+                    <p className="driver-trip-confirmation-hint" role="status">
+                      Yetkazishni qayd etish uchun dispetcher reysni tasdiqlashi kerak.
+                      Tasdiqlangandan so‘ng “Reysni yangilash” tugmasini bosing.
+                    </p>
+                  )}
                   {deliveryMutation.isError && (
                     <p className="driver-delivery-error" role="alert">
                       {apiErrorMessage(deliveryMutation.error, 'Yetkazilgan holatini saqlab bo‘lmadi.')}
@@ -516,7 +536,7 @@ export default function DriverPanel() {
                                   disabled={
                                     deliveryMutation.isPending
                                     || issueMutation.isPending
-                                    || !['confirmed', 'in_progress'].includes(selectedTrip.status)
+                                    || !canMarkStopDelivered(selectedTrip.status)
                                   }
                                   onClick={() => {
                                     if (!window.confirm(

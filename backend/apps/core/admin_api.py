@@ -241,6 +241,16 @@ class CompanyAdminViewSet(viewsets.GenericViewSet):
 
 
 class ProductAdminSerializer(serializers.ModelSerializer):
+    def get_fields(self):
+        fields = super().get_fields()
+        fields["image"].required = self.instance is None
+        return fields
+
+    def validate_image(self, image):
+        if image.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("Rasm hajmi 5 MB dan oshmasin.")
+        return image
+
     class Meta:
         model = Product
         fields = (

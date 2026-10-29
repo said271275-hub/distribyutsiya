@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildProductPayload,
+  buildProductFormData,
   effectiveShopPrice,
   findShopPrice,
   productFormSchema,
@@ -25,6 +26,24 @@ describe('dispetcher mahsulot va narx yordamchilari', () => {
       unit_volume: null,
       is_active: true,
     })
+  })
+
+  it('mahsulot rasmi va maydonlarini yuklash uchun shakl ma’lumotini tayyorlaydi', () => {
+    const file = new File(['rasm'], 'mahsulot.png', { type: 'image/png' })
+    const formData = buildProductFormData({
+      name: 'Mahsulot',
+      unit: 'box',
+      price: '15000.00',
+      unit_weight: '',
+      unit_volume: '',
+      is_active: true,
+    }, file)
+
+    expect(formData.get('name')).toBe('Mahsulot')
+    expect(formData.get('unit')).toBe('box')
+    expect(formData.get('is_active')).toBe('true')
+    expect(formData.get('image')).toBe(file)
+    expect(formData.has('unit_weight')).toBe(false)
   })
 
   it('narx yozuvi bo‘lmasa asosiy narxni, bo‘lsa do‘kon narxini tanlaydi', () => {

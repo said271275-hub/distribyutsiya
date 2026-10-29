@@ -19,9 +19,30 @@ class Command(BaseCommand):
             action="store_true",
             help="Sinov do‘konlari va xodimlarini ham yaratadi.",
         )
+        parser.add_argument(
+            "--archive-demo-products-only",
+            action="store_true",
+            help="Mavjud namuna mahsulotlarini arxivlaydi, boshqa namuna ma’lumotlarini yaratmaydi.",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
+        if options["archive_demo_products_only"]:
+            company = Company.objects.filter(name="Sirdaryo Distribyutsiya").first()
+            archived_products = 0
+            if company is not None:
+                archived_products = Product.objects.filter(
+                    company=company,
+                    name__startswith="Demo mahsulot ",
+                    is_archived=False,
+                ).update(is_active=False, is_archived=True)
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"{archived_products} ta namuna mahsuloti arxivlandi."
+                )
+            )
+            return
+
         with_demo_users = options["with_demo_users"]
         company, _ = Company.objects.get_or_create(
             name="Sirdaryo Distribyutsiya",
@@ -31,28 +52,11 @@ class Command(BaseCommand):
                 "is_active": True,
             },
         )
-        units = (Product.Unit.PIECE, Product.Unit.BOX, Product.Unit.BLOCK)
-        for index in range(1, 11):
-            defaults = {
-                "unit": units[(index - 1) % len(units)],
-                "price": Decimal(15000 + index * 2500),
-                "unit_weight": Decimal("20.000"),
-                "unit_volume": Decimal("0.080"),
-                "is_active": True,
-            }
-            product, created = Product.objects.get_or_create(
-                company=company,
-                name=f"Demo mahsulot {index:02d}",
-                defaults=defaults,
-            )
-            if not created:
-                updates = {}
-                if product.unit_weight is None:
-                    updates["unit_weight"] = defaults["unit_weight"]
-                if product.unit_volume is None:
-                    updates["unit_volume"] = defaults["unit_volume"]
-                if updates:
-                    Product.objects.filter(pk=product.pk).update(**updates)
+        archived_products = Product.objects.filter(
+            company=company,
+            name__startswith="Demo mahsulot ",
+            is_archived=False,
+        ).update(is_active=False, is_archived=True)
 
         demo_shops = 0
         demo_drivers = 0
@@ -129,7 +133,8 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Seed tayyor: 1 kompaniya, 10 mahsulot, {demo_shops} do‘kon, "
+                f"Seed tayyor: 1 kompaniya, {archived_products} demo mahsulot arxivlandi, "
+                f"{demo_shops} do‘kon, "
                 f"2 mashina, {demo_drivers} haydovchi va {demo_dispatchers} dispetcher."
             )
         )

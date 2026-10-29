@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  CalendarDays,
   Check,
   ChevronDown,
   ClipboardList,
@@ -36,6 +37,7 @@ import {
 import { useAuth } from './useAuth'
 import { ru } from './i18n/ru'
 import './ShopPanel.css'
+import RecurringOrdersPage from './RecurringOrdersPage'
 
 const LocationPicker = lazy(() => import('./ShopMap'))
 
@@ -324,6 +326,7 @@ function ShopPanel() {
             </NavLink>
           ))}
           <NavLink to="/shop/finance" className={({ isActive }) => `shop-nav-link ${isActive ? 'shop-nav-active' : ''}`}><Wallet size={18} strokeWidth={1.8} /><span>{t('finance')}</span></NavLink>
+          <NavLink to="/shop/recurring" className={({ isActive }) => `shop-nav-link ${isActive ? 'shop-nav-active' : ''}`}><CalendarDays size={18} strokeWidth={1.8} /><span>Takroriy buyurtmalar</span></NavLink>
         </nav>
         <div className="shop-sidebar-bottom">
           <div className="shop-account"><span className="shop-account-avatar">{user?.phone.slice(-2)}</span><span><strong>{profile.data?.name || user?.phone}</strong><small>{user?.phone}</small></span></div>
@@ -332,7 +335,7 @@ function ShopPanel() {
       </aside>
       <main className="shop-main">
         <header className="shop-topbar">
-          <div className="shop-breadcrumb">Tarqatuv <span>/</span> {t(navItems.find((item) => location.pathname === item.to || (item.to !== '/shop' && location.pathname.startsWith(item.to)))?.key ?? 'home')}</div>
+          <div className="shop-breadcrumb">Tarqatuv <span>/</span> {location.pathname.startsWith('/shop/recurring') ? 'Takroriy buyurtmalar' : t(navItems.find((item) => location.pathname === item.to || (item.to !== '/shop' && location.pathname.startsWith(item.to)))?.key ?? 'home')}</div>
           <div className="shop-top-actions">
             {activeContact?.phone ? <a className="shop-help-link" href={`tel:${activeContact.phone}`}><Phone size={16} />{t('help')}</a> : null}
             <label className="shop-language"><span className="sr-only">Til</span><select value={language} onChange={(event) => setLocale(event.target.value as 'uz' | 'ru')} aria-label="Til"><option value="uz">UZ</option><option value="ru">RU</option></select><ChevronDown size={13} /></label>
@@ -349,6 +352,7 @@ function ShopPanel() {
             <Route path="orders/:orderId" element={<OrderDetailPage t={t} onNotice={setNotice} />} />
             <Route path="profile" element={<ShopProfilePage t={t} />} />
             <Route path="finance" element={<FinancePage t={t} />} />
+            <Route path="recurring" element={<RecurringOrdersPage />} />
             <Route path="*" element={<Navigate to="/shop" replace />} />
           </Routes>
         </div>
@@ -358,6 +362,7 @@ function ShopPanel() {
               <span className="shop-mobile-icon"><Icon size={20} />{count ? <b>{count}</b> : null}</span><small>{t(key)}</small>
             </NavLink>
           ))}
+          <NavLink to="/shop/recurring" className={({ isActive }) => `shop-mobile-link ${isActive ? 'shop-mobile-active' : ''}`}><span className="shop-mobile-icon"><CalendarDays size={20} /></span><small>Takroriy</small></NavLink>
         </nav>
       </main>
     </div>

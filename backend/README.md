@@ -69,6 +69,13 @@ API’lari mavjud. Dispetcher oynasi va xarita bu bosqich doirasiga kirmaydi.
   python manage.py process_sms_outbox --loop
   ```
 
+Takroriy buyurtmalar uchun `python manage.py create_recurring_orders` buyrug‘i
+kelgusi yetti kun ichidagi yetkazish kunlari bo‘yicha tasdiqlash kutilayotgan
+qoralamalarni yaratadi va muddati o‘tgan qoralamalarni yangilaydi. Buyruqni
+kuniga bir marta ishga tushiring; u ikki marta bajarilganda bir xil jadval va
+sana uchun ikkinchi qoralama yaratmaydi. Buyruqni avtomatik rejalashtirish
+joylashtirish bosqichida bajariladi.
+
   Do‘kon egasi profilidan buyurtma SMS xabarnomalarini o‘chirishi mumkin;
   bir martalik kirish va ro‘yxatdan o‘tish kodlari bu sozlamaga bog‘liq emas.
   Eskiz akkauntida shablon moderatsiyasi yoqilgan bo‘lsa, SMS matnlarini oldin
@@ -197,6 +204,18 @@ mahalliy namuna ma’lumotlarini kiriting:
 
 ```powershell
 python manage.py seed_demo
+```
+
+Buyruq “Sirdaryo Distribyutsiya” namuna kompaniyasidagi eski `Demo mahsulot`
+nomli mahsulotlarni arxivlaydi va yangi demo mahsulot yaratmaydi. Mahsulot
+yaratishda haqiqiy rasm fayli talab qilinadi va uning hajmi 5 MB dan oshmasligi
+kerak. Avvalgi mahsulotni tahrirlashda rasmni almashtirish ixtiyoriy.
+
+Faqat avvalgi namuna mahsulotlarini arxivlash, boshqa demo ma’lumotlarini
+yaratmaslik uchun:
+
+```powershell
+python manage.py seed_demo --archive-demo-products-only
 ```
 
 Mahalliy PostgreSQL serversiz sinovlarni xotiradagi SQLite sozlamalari bilan

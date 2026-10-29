@@ -1,8 +1,11 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from io import BytesIO
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
+from PIL import Image
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
@@ -386,10 +389,28 @@ class AdminApiTests(TestCase):
         response = self.client.get("/api/v1/admin/products/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["id"] for row in response.data["results"]], [self.product.pk])
-        created = self.client.post(
+        missing_image = self.client.post(
             "/api/v1/admin/products/",
             {"name": "Yangi", "unit": Product.Unit.PIECE, "price": "25.00"},
             format="json",
+        )
+        self.assertEqual(missing_image.status_code, 400)
+        self.assertIn("image", missing_image.data)
+
+        image_buffer = BytesIO()
+        Image.new("RGB", (1, 1), color="green").save(image_buffer, format="PNG")
+        image = SimpleUploadedFile(
+            "mahsulot.png", image_buffer.getvalue(), content_type="image/png"
+        )
+        created = self.client.post(
+            "/api/v1/admin/products/",
+            {
+                "name": "Yangi",
+                "unit": Product.Unit.PIECE,
+                "price": "25.00",
+                "image": image,
+            },
+            format="multipart",
         )
         self.assertEqual(created.status_code, 201, created.data)
         self.assertEqual(Product.objects.get(pk=created.data["id"]).company, self.company)

@@ -27,24 +27,20 @@ class DemoSeedCommandTests(TestCase):
         call_command("seed_demo", stdout=StringIO())
 
         company = Company.objects.get(name="Sirdaryo Distribyutsiya")
-        self.assertEqual(Product.objects.filter(company=company).count(), 10)
+        self.assertEqual(Product.objects.filter(company=company).count(), 0)
         self.assertEqual(Vehicle.objects.filter(company=company).count(), 2)
         self.assertFalse(User.objects.exists())
         self.assertFalse(Shop.objects.exists())
         self.assertIn("0 do‘kon", output.getvalue())
         self.assertIn("0 haydovchi", output.getvalue())
 
-    def test_seed_creates_expected_demo_data_and_is_idempotent(self):
+    def test_seed_does_not_create_demo_products_and_is_idempotent(self):
         call_command("seed_demo", "--with-demo-users", stdout=StringIO())
         call_command("seed_demo", "--with-demo-users", stdout=StringIO())
 
         company = Company.objects.get(name="Sirdaryo Distribyutsiya")
         products = list(Product.objects.filter(company=company))
-        self.assertEqual(len(products), 10)
-        self.assertTrue(all(product.unit_weight is not None for product in products))
-        self.assertTrue(all(product.unit_volume is not None for product in products))
-        self.assertTrue(all(product.unit_weight > 0 for product in products))
-        self.assertTrue(all(product.unit_volume > 0 for product in products))
+        self.assertEqual(products, [])
         self.assertEqual(
             Shop.objects.filter(company_links__company=company).distinct().count(), 20
         )
@@ -60,7 +56,14 @@ class DemoSeedCommandTests(TestCase):
     def test_demo_product_loads_split_nearby_orders_into_two_trips(self):
         call_command("seed_demo", "--with-demo-users", stdout=StringIO())
         company = Company.objects.get(name="Sirdaryo Distribyutsiya")
-        product = Product.objects.get(company=company, name="Demo mahsulot 02")
+        product = Product.objects.create(
+            company=company,
+            name="Mahsulot sinovi",
+            unit=Product.Unit.BOX,
+            price=Decimal("1000.00"),
+            unit_weight=Decimal("20.000"),
+            unit_volume=Decimal("0.080"),
+        )
         shops = list(
             Shop.objects.filter(
                 company_links__company=company,
@@ -101,6 +104,48 @@ class DemoSeedCommandTests(TestCase):
             [Decimal("800.00000"), Decimal("800.00000")],
         )
         self.assertEqual(response.data["unassigned_orders"], [])
+
+    def test_seed_archives_only_generated_demo_products(self):
+        company = Company.objects.create(name="Sirdaryo Distribyutsiya")
+        demo_product = Product.objects.create(
+            company=company,
+            name="Demo mahsulot 02",
+            unit=Product.Unit.BOX,
+            price=Decimal("15000.00"),
+        )
+        real_product = Product.objects.create(
+            company=company,
+            name="Ichimlik",
+            unit=Product.Unit.BOX,
+            price=Decimal("15000.00"),
+        )
+
+        call_command("seed_demo", stdout=StringIO())
+
+        demo_product.refresh_from_db()
+        real_product.refresh_from_db()
+        self.assertTrue(demo_product.is_archived)
+        self.assertFalse(demo_product.is_active)
+        self.assertFalse(real_product.is_archived)
+        self.assertTrue(real_product.is_active)
+
+    def test_archive_demo_products_only_does_not_create_other_demo_data(self):
+        company = Company.objects.create(name="Sirdaryo Distribyutsiya")
+        demo_product = Product.objects.create(
+            company=company,
+            name="Demo mahsulot 01",
+            unit=Product.Unit.BOX,
+            price=Decimal("15000.00"),
+        )
+
+        call_command("seed_demo", "--archive-demo-products-only", stdout=StringIO())
+
+        demo_product.refresh_from_db()
+        self.assertTrue(demo_product.is_archived)
+        self.assertFalse(demo_product.is_active)
+        self.assertFalse(Vehicle.objects.exists())
+        self.assertFalse(Shop.objects.exists())
+        self.assertEqual(Product.objects.filter(company=company).count(), 1)
 
     @override_settings(
         DEBUG=True,

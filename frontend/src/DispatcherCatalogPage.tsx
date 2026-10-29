@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Archive, Check, LoaderCircle, Pencil, Plus, Save, Store, Tags, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import { useForm } from 'react-hook-form'
 import api, { apiErrorMessage } from './api'
 import {
   buildProductPayload,
+  buildProductFormData,
   effectiveShopPrice,
   findShopPrice,
   productFormSchema,
@@ -18,13 +19,14 @@ import './DispatcherCatalog.css'
 
 type Product = ProductPayload & {
   id: number
+  image: string | null
   is_archived: boolean
   created_at: string
   updated_at: string
 }
 type Shop = { id: number; name: string; district: string; status: string }
 type Page<T> = { count: number; next: string | null; previous: string | null; results: T[] }
-type ProductRequest = { id?: number; values: ProductFormValues }
+type ProductUploadRequest = { id?: number; values: ProductFormValues; image: File | null }
 type ShopPriceFormValues = { shop: string; price: string; discount_percent: string }
 
 const units = [
@@ -52,6 +54,8 @@ export default function DispatcherCatalogPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [showProductForm, setShowProductForm] = useState(false)
   const [pageError, setPageError] = useState('')
+  const [productImage, setProductImage] = useState<File | null>(null)
+  const [productImageError, setProductImageError] = useState('')
   const productForm = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
     defaultValues: emptyProduct,
@@ -67,8 +71,10 @@ export default function DispatcherCatalogPage() {
     productRows[0] ?? null
 
   const productMutation = useMutation({
-    mutationFn: async ({ id, values }: ProductRequest) => {
-      const payload = buildProductPayload(values)
+    mutationFn: async ({ id, values, image }: ProductUploadRequest) => {
+      const payload = image
+        ? buildProductFormData(values, image)
+        : buildProductPayload(values)
       const response = id
         ? await api.patch<Product>(`/v1/admin/products/${id}/`, payload)
         : await api.post<Product>('/v1/admin/products/', payload)
@@ -79,6 +85,8 @@ export default function DispatcherCatalogPage() {
       setSelectedProductId(product.id)
       setShowProductForm(false)
       setEditingProduct(null)
+      setProductImage(null)
+      setProductImageError('')
       productForm.reset(emptyProduct)
       await queryClient.invalidateQueries({ queryKey: ['dispatcher-products'] })
     },
@@ -100,12 +108,16 @@ export default function DispatcherCatalogPage() {
 
   const openCreateForm = () => {
     setEditingProduct(null)
+    setProductImage(null)
+    setProductImageError('')
     productForm.reset(emptyProduct)
     setPageError('')
     setShowProductForm(true)
   }
   const openEditForm = (product: Product) => {
     setEditingProduct(product)
+    setProductImage(null)
+    setProductImageError('')
     productForm.reset({
       name: product.name,
       unit: product.unit,
@@ -119,8 +131,25 @@ export default function DispatcherCatalogPage() {
   }
   const submitProduct = productForm.handleSubmit((values) => {
     setPageError('')
-    productMutation.mutate({ id: editingProduct?.id, values })
+    if (!editingProduct && !productImage) {
+      setProductImageError('Mahsulot rasmini tanlang.')
+      return
+    }
+    if (productImage && !productImage.type.startsWith('image/')) {
+      setProductImageError('Faqat rasm faylini tanlang.')
+      return
+    }
+    if (productImage && productImage.size > 5 * 1024 * 1024) {
+      setProductImageError('Rasm hajmi 5 MB dan oshmasin.')
+      return
+    }
+    setProductImageError('')
+    productMutation.mutate({ id: editingProduct?.id, values, image: productImage })
   })
+  const selectProductImage = (event: ChangeEvent<HTMLInputElement>) => {
+    setProductImage(event.target.files?.[0] ?? null)
+    setProductImageError('')
+  }
   const confirmArchive = (product: Product) => {
     if (!window.confirm(`“${product.name}” mahsuloti arxivlansinmi? U butunlay o‘chirilmaydi.`)) return
     setPageError('')
@@ -231,6 +260,21 @@ export default function DispatcherCatalogPage() {
               <span>Mahsulot nomi</span>
               <input {...productForm.register('name')} maxLength={200} />
               {productForm.formState.errors.name && <small role="alert">{productForm.formState.errors.name.message}</small>}
+            </label>
+            <label>
+              <span>Mahsulot rasmi{!editingProduct ? ' (majburiy)' : ' (ixtiyoriy)'}</span>
+              {editingProduct?.image && !productImage && (
+                <img className="dispatcher-product-image-preview" src={editingProduct.image} alt={`${editingProduct.name} rasmi`} />
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                required={!editingProduct}
+                onChange={selectProductImage}
+              />
+              <small>Rasm fayli, hajmi 5 MB gacha.</small>
+              {productImage && <small>Tanlandi: {productImage.name}</small>}
+              {productImageError && <small role="alert">{productImageError}</small>}
             </label>
             <div className="dispatcher-product-form-grid">
               <label>

@@ -4,6 +4,10 @@ export type DriverStopProgressInput = {
   delivered_at: string | null
 }
 
+export function canMarkStopDelivered(tripStatus: string): boolean {
+  return tripStatus === 'confirmed' || tripStatus === 'in_progress'
+}
+
 export function sortDriverStops<T extends DriverStopProgressInput>(stops: readonly T[]): T[] {
   return [...stops].sort((first, second) => (
     Number(Boolean(first.delivered_at)) - Number(Boolean(second.delivered_at))

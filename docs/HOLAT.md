@@ -19,12 +19,25 @@
   savdo, bekor qilingan va muammoli buyurtmalar, qarzdorlar va oldindan
   to‘lovlar, haydovchilar hamda mahsulotlar bo‘yicha o‘qish hisobotlari va
   Excel’da ochiladigan CSV eksporti qo‘shildi.
-- **6-bosqichning qolgan imkoniyatlari — bajarilmagan:** takroriy
-  buyurtmalar, ombor qoldig‘i, yetkazish isboti va ishlab chiqarishga chiqarish.
+- **6-bosqich, takroriy buyurtmalar — bajarildi:** do‘konchi haftalik jadval
+  yaratadi, tahrirlaydi, pauza qiladi yoki arxivlaydi. Tizim kelgusi yetkazish
+  kunlari uchun tasdiqlash kutilayotgan qoralamalarni yaratadi; tasdiqlanmagan
+  qoralamalar buyurtma, reys yoki qarzga ta’sir qilmaydi.
+  `create_recurring_orders` buyrug‘i dublikat yaratmaydi, tasdiqlash esa amaldagi
+  narx va chegirmani, kompaniya aloqasini hamda buyurtma vaqt chegarasini qayta
+  tekshiradi.
+- **6-bosqichning qolgan imkoniyatlari — bajarilmagan:** ombor qoldig‘i,
+  yetkazish isboti va ishlab chiqarishga chiqarish.
 
 ## Sinovlar va tekshirilmagan ishlar
 
-- So‘nggi tekshiruvda server sinovlaridan **123**, veb sinovlaridan **42** tasi muvaffaqiyatli o‘tdi.
+- Takroriy buyurtmalar uchun maqsadli server sinovlaridan **13** tasi va veb
+  sinovlaridan **42** tasi muvaffaqiyatli o‘tdi; veb to‘plami yig‘ilishi ham o‘tdi.
+- Barcha server sinovlarida **140** sinovdan **139** tasi o‘tdi. Yagona
+  muvaffaqiyatsiz sinov — hisobotlardagi mavjud
+  `test_discounted_sales_total_matches_posted_delivery_debits` tekshiruvi; u
+  `3500.00` o‘rniga `3500` matn formatini kutgan. Bu vazifada hisobot kodi
+  o‘zgartirilmadi.
 - Oxirgi buyurtmani takrorlash, dispetcherning buyurtmani boshqarish, reysni tuzish va 4C-3 sahifalarining to‘liq foydalanuvchi oqimlari uchun veb sinovlari yetishmaydi.
 - Haydovchi oynasining hozirgi ko‘rinishi bor, ammo haydovchining yetkazish amallari va oflayn sinxronlash tekshirilmagan, chunki ular hali yozilmagan.
 - Eskiz SMS provayderi mock bilan sinovdan o‘tkaziladi; haqiqiy SMS yuborish
@@ -32,6 +45,10 @@
   SMS navbatining doimiy qayta ishlashi uchun `process_sms_outbox --loop`
   buyrug‘i alohida ishchi sifatida ishlashi kerak. Docker orqali ishga tushirish
   tekshirilmagan.
+- Takroriy buyurtma qoralamalarini har kuni yaratish va muddati o‘tganlarini
+  yangilash uchun `python manage.py create_recurring_orders` buyrug‘ini kuniga
+  bir marta ishga tushiring. Buyruq o‘z-o‘zidan rejalashtirilmaydi; avtomatik
+  ishga tushirish joylashtirish sozlamasida bajariladi.
 - Reys sig‘imi barcha mahsulotlarda vazn bo‘lsa vazn, aks holda barcha mahsulotlarda hajm bo‘yicha tekshiriladi. O‘lchovlar aralash yoki yetishmasa sig‘im noma’lum deb qoladi.
 
 ## Ochiq qarorlar

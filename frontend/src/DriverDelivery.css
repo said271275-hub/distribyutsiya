@@ -5,7 +5,9 @@
 .driver-trip-progress-track>span{display:block;height:100%;border-radius:inherit;background:var(--green);transition:width .2s ease}
 .driver-stop-card-delivered{border-color:color-mix(in srgb,var(--green) 35%,var(--line));background:color-mix(in srgb,var(--green-soft) 38%,var(--surface))}
 .driver-stop-delivered{display:flex;align-items:center;gap:7px;color:var(--green);font-size:11px;font-weight:750}
-.driver-mark-delivered{display:flex;min-height:46px;align-items:center;justify-content:center;gap:8px;padding:0 13px;border:0;border-radius:9px;color:#fff;background:var(--green);font:inherit;font-size:12px;font-weight:750}
+.driver-stop-heading-actions{display:flex;align-items:center;gap:8px}.driver-refresh-trip{display:inline-flex;min-height:34px;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--line);border-radius:7px;color:var(--ink);background:var(--surface);font:inherit;font-size:10px;font-weight:650;cursor:pointer}.driver-refresh-trip:disabled{cursor:wait;opacity:.65}.driver-refresh-spinning{animation:driver-refresh-spin .8s linear infinite}.driver-trip-confirmation-hint{margin:0 0 11px;padding:10px 11px;border:1px solid color-mix(in srgb,#d28a2e 28%,var(--line));border-radius:8px;color:var(--ink);background:color-mix(in srgb,#d28a2e 9%,var(--surface));font-size:11px;line-height:1.5}
+.driver-mark-delivered{display:flex;width:100%;min-height:46px;align-items:center;justify-content:center;gap:8px;padding:0 13px;border:0;border-radius:9px;color:#fff;background:var(--green);font:inherit;font-size:12px;font-weight:750;cursor:pointer}
+.driver-mark-delivered:not(:disabled):hover{filter:brightness(.94)}.driver-mark-delivered:not(:disabled):active{transform:translateY(1px)}
 .driver-mark-delivered:disabled{cursor:not-allowed;opacity:.55}
 .driver-delivery-error{margin:0 0 12px;padding:10px;border-radius:8px;color:var(--red);background:color-mix(in srgb,var(--red) 9%,var(--surface));font-size:11px}
 .driver-report-issue{min-height:43px;padding:0 12px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--surface);font:inherit;font-size:11px;font-weight:700}
@@ -25,3 +27,4 @@
 .driver-issue-history-entry{display:grid;gap:3px;padding:8px 10px;border-left:3px solid var(--red);border-radius:5px;background:color-mix(in srgb,var(--red) 7%,var(--surface))}
 .driver-issue-history-entry strong{font-size:10px}
 .driver-issue-history-entry small,.driver-issue-history-entry p{margin:0;color:var(--muted);font-size:9px}
+@keyframes driver-refresh-spin{to{transform:rotate(360deg)}}

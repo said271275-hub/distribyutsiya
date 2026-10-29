@@ -31,6 +31,12 @@ from apps.orders.shop_api import (
     ShopOrderRepeatCartView,
     ShopOrderRepeatView,
 )
+from apps.orders.recurring_api import (
+    ShopRecurringDraftActionView,
+    ShopRecurringOrdersView,
+    ShopRecurringScheduleActionView,
+    ShopRecurringScheduleDetailView,
+)
 from apps.payments.shop_api import ShopFinanceView
 
 
@@ -58,6 +64,22 @@ urlpatterns = [
     path("orders/<int:pk>/", ShopOrderDetailView.as_view(), name="shop-order-detail"),
     path("orders/<int:pk>/cancel/", ShopOrderCancelView.as_view(), name="shop-order-cancel"),
     path("orders/<int:pk>/repeat/", ShopOrderRepeatView.as_view(), name="shop-order-repeat"),
+    path("shop/recurring-orders/", ShopRecurringOrdersView.as_view(), name="shop-recurring-orders"),
+    path(
+        "shop/recurring-orders/<int:pk>/",
+        ShopRecurringScheduleDetailView.as_view(),
+        name="shop-recurring-order-detail",
+    ),
+    path(
+        "shop/recurring-orders/<int:pk>/<str:action>/",
+        ShopRecurringScheduleActionView.as_view(),
+        name="shop-recurring-order-action",
+    ),
+    path(
+        "shop/recurring-drafts/<int:pk>/<str:action>/",
+        ShopRecurringDraftActionView.as_view(),
+        name="shop-recurring-draft-action",
+    ),
     path("shop/finance/", ShopFinanceView.as_view(), name="shop-finance"),
     path("admin/route-settings/", RouteSettingsView.as_view(), name="admin-route-settings"),
     path("admin/dashboard/", DashboardView.as_view(), name="admin-dashboard"),

@@ -51,6 +51,19 @@ const reports: Array<{ id: ReportName; label: string }> = [
   { id: 'products', label: 'Mahsulotlar' },
 ]
 
+const reportFileNames: Record<ReportName, string> = {
+  sales: 'savdo',
+  debtors: 'qarzdorlar',
+  drivers: 'haydovchilar',
+  products: 'mahsulotlar',
+}
+
+const reportUnitLabels: Record<string, string> = {
+  piece: 'dona',
+  box: 'quti',
+  block: 'blok',
+}
+
 function localDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
@@ -121,7 +134,7 @@ export default function DispatcherReportsPage() {
       const url = URL.createObjectURL(response.data)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `${report}_${startDate}_${endDate}.csv`
+      anchor.download = `hisobot_${reportFileNames[report]}_${startDate}_${endDate}.csv`
       anchor.click()
       URL.revokeObjectURL(url)
     } catch (error) {
@@ -149,7 +162,7 @@ export default function DispatcherReportsPage() {
           onClick={() => void exportCsv()}
           disabled={exporting || query.isLoading}
         >
-          <Download size={16} /> {exporting ? 'Tayyorlanmoqda…' : 'CSV yuklab olish'}
+          <Download size={16} /> {exporting ? 'Tayyorlanmoqda…' : 'Hisobot faylini yuklab olish'}
         </button>
       </div>
 
@@ -267,7 +280,7 @@ export default function DispatcherReportsPage() {
               columns={['Mahsulot', 'Birlik', 'Yetkazilgan miqdor', 'Yetkazilgan summa']}
               rows={(data.rows as ProductRow[]).map((row) => [
                 row.product_name,
-                row.unit,
+                reportUnitLabels[row.unit] ?? 'birlik',
                 row.delivered_quantity,
                 money(row.delivered_amount),
               ])}

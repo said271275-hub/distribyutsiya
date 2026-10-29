@@ -24,6 +24,11 @@ def _phone_suffix(phone: str) -> str:
 
 
 def _message(notification: SmsOutbox) -> str:
+    if notification.event == SmsOutbox.Event.RECURRING_DRAFT:
+        return (
+            f"Takroriy buyurtma #{notification.recurring_draft_id} "
+            "tasdiqlashni kutmoqda."
+        )
     order_id = notification.order_id
     messages = {
         SmsOutbox.Event.RECEIVED: f"Buyurtma #{order_id} qabul qilindi.",
@@ -51,6 +56,15 @@ def queue_order_sms(order, event: str, *, eta=None) -> SmsOutbox:
     return notification
 
 
+def queue_recurring_draft_sms(draft) -> SmsOutbox:
+    notification = SmsOutbox.objects.create(
+        recurring_draft=draft,
+        event=SmsOutbox.Event.RECURRING_DRAFT,
+    )
+    transaction.on_commit(partial(submit_sms_notification, notification.pk))
+    return notification
+
+
 def _record_failure(notification_id: int, error_code: str, phone: str) -> float | None:
     now = timezone.now()
     retry_delay = None
@@ -72,8 +86,13 @@ def _record_failure(notification_id: int, error_code: str, phone: str) -> float 
                 "claimed_at",
             )
         )
+        company_id = (
+            notification.order.company_id
+            if notification.order_id
+            else notification.recurring_draft.company_id
+        )
         AuditLog.objects.create(
-            company=notification.order.company,
+            company_id=company_id,
             action="sms.delivery_failed",
             entity_type="SmsOutbox",
             entity_id=str(notification.pk),
@@ -96,7 +115,12 @@ def deliver_sms_notification(notification_id: int) -> None:
         with transaction.atomic():
             notification = (
                 SmsOutbox.objects.select_for_update()
-                .select_related("order__company", "order__shop__owner")
+                .select_related(
+                    "order__company",
+                    "order__shop__owner",
+                    "recurring_draft__company",
+                    "recurring_draft__schedule__shop__owner",
+                )
                 .filter(pk=notification_id)
                 .first()
             )
@@ -115,15 +139,19 @@ def deliver_sms_notification(notification_id: int) -> None:
             ):
                 return
 
-            order = notification.order
-            shop = order.shop
+            if notification.order_id:
+                company_id = notification.order.company_id
+                shop = notification.order.shop
+            else:
+                company_id = notification.recurring_draft.company_id
+                shop = notification.recurring_draft.schedule.shop
             if not shop.sms_notifications_enabled:
                 notification.state = SmsOutbox.State.SUPPRESSED
                 notification.claimed_at = None
                 notification.save(update_fields=("state", "claimed_at"))
                 return
             if not CompanyShopLink.objects.filter(
-                company_id=order.company_id,
+                company_id=company_id,
                 shop_id=shop.pk,
                 is_active=True,
                 company__is_active=True,
@@ -156,10 +184,19 @@ def deliver_sms_notification(notification_id: int) -> None:
     except SmsProviderError as error:
         order_data = (
             SmsOutbox.objects.filter(pk=notification_id)
-            .values("order__shop__owner__phone")
+            .values(
+                "order__shop__owner__phone",
+                "recurring_draft__schedule__shop__owner__phone",
+            )
             .first()
         )
-        phone = order_data["order__shop__owner__phone"] if order_data else ""
+        phone = ""
+        if order_data:
+            phone = (
+                order_data["order__shop__owner__phone"]
+                or order_data["recurring_draft__schedule__shop__owner__phone"]
+                or ""
+            )
         retry_delay = _record_failure(notification_id, error.code, phone)
         logger.warning(
             "Buyurtma SMS yuborilmadi: xabar=%s raqam_oxiri=%s xato=%s",

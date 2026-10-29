@@ -14,6 +14,7 @@ from rest_framework import serializers
 from rest_framework.views import APIView
 
 from apps.audit.models import AuditLog
+from apps.catalog.models import Product
 from apps.core.admin_api import company_for_request
 from apps.core.permissions import CompanyAdminPermission
 from apps.logistics.models import Trip, TripStop
@@ -28,6 +29,17 @@ ISSUE_REASONS = {
     "refused": "Do‘kon qabul qilmadi",
     "partial_delivery": "Qisman yetkazildi",
     "other": "Boshqa sabab",
+}
+PRODUCT_UNIT_LABELS = {
+    Product.Unit.PIECE: "dona",
+    Product.Unit.BOX: "quti",
+    Product.Unit.BLOCK: "blok",
+}
+REPORT_FILE_NAMES = {
+    "sales": "savdo",
+    "debtors": "qarzdorlar",
+    "drivers": "haydovchilar",
+    "products": "mahsulotlar",
 }
 
 
@@ -383,7 +395,7 @@ def _products_report(company, start, end):
 def _csv_response(report, report_name, start_date, end_date):
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = (
-        f'attachment; filename="{report_name}_{start_date}_{end_date}.csv"'
+        f'attachment; filename="hisobot_{REPORT_FILE_NAMES[report_name]}_{start_date}_{end_date}.csv"'
     )
     response.write("\ufeff")
     writer = csv.writer(response)
@@ -441,7 +453,7 @@ def _csv_response(report, report_name, start_date, end_date):
             writer.writerow(
                 [
                     safe_text(row["product_name"]),
-                    row["unit"],
+                    PRODUCT_UNIT_LABELS.get(row["unit"], "birlik"),
                     row["delivered_quantity"],
                     row["delivered_amount"],
                 ]
