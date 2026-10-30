@@ -114,7 +114,7 @@ def deliver_sms_notification(notification_id: int) -> None:
         now = timezone.now()
         with transaction.atomic():
             notification = (
-                SmsOutbox.objects.select_for_update()
+                SmsOutbox.objects.select_for_update(of=("self",))
                 .select_related(
                     "order__company",
                     "order__shop__owner",

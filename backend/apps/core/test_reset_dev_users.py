@@ -27,7 +27,12 @@ class ResetDevUsersCommandTests(TestCase):
         cls.company = Company.objects.get(name="Sirdaryo Distribyutsiya")
         cls.user = User.objects.get(phone="+998900030001")
         cls.shop = Shop.objects.get(phone_primary="+998900020001")
-        cls.product = Product.objects.filter(company=cls.company).first()
+        cls.product = Product.objects.create(
+            company=cls.company,
+            name="Sinov mahsuloti",
+            unit=Product.Unit.PIECE,
+            price=Decimal("100.00"),
+        )
         cls.vehicle = Vehicle.objects.filter(company=cls.company).first()
         cls.driver = DriverProfile.objects.get(user=cls.user)
         cls.container = ReturnableContainer.objects.create(

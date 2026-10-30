@@ -2,21 +2,82 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  color-scheme: light;
+  --surface: #e8eef3;
+  --surface-raised: #e8eef3;
+  --canvas: #e3eaf0;
+  --shadow-light: #ffffff;
+  --shadow-dark: #c1ccd5;
+  --border: #c7d2dc;
+  --text: #1c2b35;
+  --text-muted: #52636e;
+  --accent: #087f68;
+  --accent-hover: #066a57;
+  --accent-soft: #d7eee7;
+  --focus-ring: #005b4a;
+  --success: #176345;
+  --success-surface: #dcefe5;
+  --warning: #76500a;
+  --warning-surface: #f3e8cc;
+  --danger: #a52e3b;
+  --danger-surface: #f4dfe0;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+  --elev-1: 3px 3px 7px var(--shadow-dark), -3px -3px 7px var(--shadow-light);
+  --elev-2: 5px 5px 11px var(--shadow-dark), -5px -5px 11px var(--shadow-light);
+  --elev-3: 8px 8px 18px var(--shadow-dark), -8px -8px 18px var(--shadow-light);
+  --inset-1: inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light);
+  --inset-2: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #0f172a;
-  background: #f8fafc;
+  color: var(--text);
+  background: var(--canvas);
   font-optical-sizing: auto;
+}
+
+.dark {
+  color-scheme: dark;
+  --surface: #202b2b;
+  --surface-raised: #202b2b;
+  --canvas: #1a2424;
+  --shadow-light: #2e3b3a;
+  --shadow-dark: #131b1c;
+  --border: #3b4a48;
+  --text: #edf4f1;
+  --text-muted: #b6c4bf;
+  --accent: #63d9b8;
+  --accent-hover: #8be8cd;
+  --accent-soft: #24463e;
+  --focus-ring: #a2f6dc;
+  --success: #91e2b3;
+  --success-surface: #244437;
+  --warning: #ffd17a;
+  --warning-surface: #493b22;
+  --danger: #ff9a9e;
+  --danger-surface: #482b30;
+  --elev-1: 3px 3px 7px var(--shadow-dark), -3px -3px 7px var(--shadow-light);
+  --elev-2: 5px 5px 11px var(--shadow-dark), -5px -5px 11px var(--shadow-light);
+  --elev-3: 8px 8px 18px var(--shadow-dark), -8px -8px 18px var(--shadow-light);
+  --inset-1: inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light);
+  --inset-2: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  color: var(--text);
+  background: var(--canvas);
+}
+
+html {
+  accent-color: var(--accent);
 }
 
 button,
@@ -31,15 +92,57 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
+button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+input,
+select,
+textarea {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background-color: var(--surface-raised);
+  box-shadow: var(--inset-1);
+}
+
+button:active:not(:disabled) {
+  box-shadow: var(--inset-1);
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid rgb(20 184 166 / 28%);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-.dark {
-  color-scheme: dark;
+table {
+  border-color: var(--border);
+}
+
+th,
+td {
+  border-color: var(--border);
+}
+
+.shop-app-shell button,
+.driver-panel button {
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
