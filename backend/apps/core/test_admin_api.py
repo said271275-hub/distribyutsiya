@@ -795,6 +795,7 @@ class AdminApiTests(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         driver = User.objects.get(phone="+998900004010")
         self.assertEqual(driver.company, self.company)
+        self.assertTrue(driver.must_change_password)
         self.assertTrue(DriverProfile.objects.filter(user=driver, company=self.company).exists())
         deactivated = self.client.post(
             f"/api/v1/admin/staff/{driver.pk}/deactivate/", {}, format="json"
@@ -827,6 +828,7 @@ class AdminApiTests(TestCase):
         )
         self.assertEqual(created.status_code, 201, created.data)
         staff = User.objects.get(pk=created.data["id"])
+        self.assertTrue(staff.must_change_password)
         old_auth_version = staff.auth_version
 
         edited = self.client.patch(
@@ -836,6 +838,9 @@ class AdminApiTests(TestCase):
         )
         self.assertEqual(edited.status_code, 200, edited.data)
         self.assertEqual(edited.data["phone"], "+998900004013")
+        staff.refresh_from_db()
+        self.assertGreater(staff.auth_version, old_auth_version)
+        old_auth_version = staff.auth_version
         self.assertTrue(AuditLog.objects.filter(
             actor=self.admin, entity_type="User", entity_id=str(staff.pk), action="update"
         ).exists())
@@ -859,6 +864,7 @@ class AdminApiTests(TestCase):
         staff.refresh_from_db()
         self.assertTrue(staff.check_password("New-Safe-Password-939!"))
         self.assertGreater(staff.auth_version, old_auth_version)
+        self.assertTrue(staff.must_change_password)
         self.assertTrue(AuditLog.objects.filter(
             actor=self.admin,
             entity_type="User",

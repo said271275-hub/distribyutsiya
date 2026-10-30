@@ -36,6 +36,7 @@ type TripSnapshotRow<T> = {
 type OfflineSessionRow = {
   actorId: number
   companyId: number | null
+  mustChangePassword?: boolean
 }
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -192,6 +193,7 @@ export async function getDriverOfflineSession(): Promise<AuthUser | null> {
         phone: '',
         role: 'driver',
         company_id: session.companyId,
+        must_change_password: session.mustChangePassword ?? false,
       } : null)
     }
     transaction.onerror = () => {
@@ -210,7 +212,11 @@ export async function saveDriverOfflineSession(user: AuthUser): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(['trips', 'outbox', 'sessions'], 'readwrite')
     const sessions = transaction.objectStore('sessions')
-    const session: OfflineSessionRow = { actorId: user.id, companyId: user.company_id }
+    const session: OfflineSessionRow = {
+      actorId: user.id,
+      companyId: user.company_id,
+      mustChangePassword: user.must_change_password,
+    }
     const request = sessions.getAll()
     request.onsuccess = () => {
       const storedSessions = request.result as OfflineSessionRow[]

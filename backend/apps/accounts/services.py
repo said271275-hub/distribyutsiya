@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
@@ -29,6 +30,23 @@ def normalize_uz_phone(value: str) -> str:
     if len(digits) == 12 and digits.startswith("998"):
         return f"+{digits}"
     raise ValidationError({"phone": "Telefon raqamini +998 XX XXX XX XX formatida kiriting."})
+
+
+def validate_user_password(password: str, user: User | None = None) -> None:
+    try:
+        password_validation.validate_password(password, user=user)
+    except DjangoValidationError as error:
+        messages_by_code = {
+            "password_too_short": "Parol kamida 8 ta belgidan iborat bo‘lsin.",
+            "password_too_common": "Bu parol juda oddiy. Boshqa parol tanlang.",
+            "password_entirely_numeric": "Parol faqat raqamlardan iborat bo‘lmasin.",
+            "password_too_similar": "Parol shaxsiy ma’lumotlarga juda o‘xshash.",
+        }
+        messages = [
+            messages_by_code.get(message.code, "Parol talablariga mos kelmadi.")
+            for message in error.error_list
+        ]
+        raise ValidationError({"password": messages}) from error
 
 
 def audit_event(action, *, user=None, company=None, entity_type="User", entity_id=""):
@@ -92,15 +110,11 @@ def send_registration_otp(phone: str) -> None:
     _send_otp(phone, PhoneOTP.Purpose.REGISTRATION, "Ro‘yxatdan o‘tish kodi: {code}")
 
 
-def send_login_otp(*, phone: str, password: str, scope: str, ip_address: str) -> None:
-    login_user(
-        phone=phone,
-        password=password,
-        scope=scope,
-        ip_address=ip_address,
-        complete=False,
-    )
-    _send_otp(phone, PhoneOTP.Purpose.LOGIN, "Kirish kodi: {code}")
+def send_password_reset_otp(phone: str) -> None:
+    phone = normalize_uz_phone(phone)
+    user = User.objects.filter(phone=phone, is_deleted=False).first()
+    if user:
+        _send_otp(phone, PhoneOTP.Purpose.PASSWORD_RESET, "Parolni tiklash kodi: {code}")
 
 
 def send_restore_otp(*, phone: str, password: str) -> None:
@@ -115,11 +129,33 @@ def send_restore_otp(*, phone: str, password: str) -> None:
     )
     if deletion is None or deletion.scheduled_for <= timezone.now():
         raise ValidationError({"account": "Akkauntni tiklash muddati tugagan."})
-    _send_otp(phone, PhoneOTP.Purpose.LOGIN, "Akkauntni tiklash kodi: {code}")
+    _send_otp(
+        phone,
+        PhoneOTP.Purpose.ACCOUNT_DELETION,
+        "Akkauntni tiklash kodi: {code}",
+    )
 
 
-def consume_login_otp(phone: str, code: str) -> None:
-    _consume_otp(phone, PhoneOTP.Purpose.LOGIN, code)
+def send_phone_change_otp(*, user: User, phone: str) -> str:
+    phone = normalize_uz_phone(phone)
+    if phone == user.phone:
+        raise ValidationError({"phone": "Yangi telefon raqami hozirgi raqamdan farq qilishi kerak."})
+    if User.objects.filter(phone=phone).exists():
+        raise ValidationError({"phone": "Bu telefon raqami allaqachon ro‘yxatdan o‘tgan."})
+    _send_otp(
+        phone,
+        PhoneOTP.Purpose.PHONE_CHANGE,
+        "Telefon raqamini almashtirish kodi: {code}",
+    )
+    return phone
+
+
+def send_account_deletion_otp(user: User) -> None:
+    _send_otp(
+        user.phone,
+        PhoneOTP.Purpose.ACCOUNT_DELETION,
+        "Akkauntni o‘chirish kodi: {code}",
+    )
 
 
 def _consume_otp(phone: str, purpose: str, code: str) -> None:
@@ -155,14 +191,53 @@ def consume_registration_otp(phone: str, code: str) -> None:
     _consume_otp(phone, PhoneOTP.Purpose.REGISTRATION, code)
 
 
+def reset_user_password(*, phone: str, code: str, password: str) -> None:
+    phone = normalize_uz_phone(phone)
+    with transaction.atomic():
+        user = User.objects.select_for_update().filter(phone=phone).first()
+        if user is None or user.is_deleted:
+            raise AuthenticationFailed("Telefon yoki parol noto‘g‘ri.")
+        validate_user_password(password, user=user)
+        _consume_otp(phone, PhoneOTP.Purpose.PASSWORD_RESET, code)
+        user.set_password(password)
+        user.auth_version += 1
+        user.must_change_password = False
+        user.save(update_fields=("password", "auth_version", "must_change_password"))
+        LoginAttempt.objects.filter(phone=phone).delete()
+        audit_event("password_reset", user=user, entity_type="Login")
+
+
+def change_user_phone(*, user: User, phone: str, code: str) -> User:
+    phone = normalize_uz_phone(phone)
+    try:
+        with transaction.atomic():
+            locked_user = User.objects.select_for_update().get(pk=user.pk)
+            if phone == locked_user.phone:
+                raise ValidationError(
+                    {"phone": "Yangi telefon raqami hozirgi raqamdan farq qilishi kerak."}
+                )
+            if User.objects.filter(phone=phone).exclude(pk=locked_user.pk).exists():
+                raise ValidationError(
+                    {"phone": "Bu telefon raqami allaqachon ro‘yxatdan o‘tgan."}
+                )
+            _consume_otp(phone, PhoneOTP.Purpose.PHONE_CHANGE, code)
+            locked_user.phone = phone
+            locked_user.auth_version += 1
+            locked_user.save(update_fields=("phone", "auth_version"))
+            LoginAttempt.objects.filter(phone__in=(user.phone, phone)).delete()
+            audit_event("phone_changed", user=locked_user, entity_type="User")
+    except IntegrityError as error:
+        raise ValidationError(
+            {"phone": "Bu telefon raqami allaqachon ro‘yxatdan o‘tgan."}
+        ) from error
+    return locked_user
+
+
 def register_shop_owner(*, phone: str, code: str, password: str) -> User:
     phone = normalize_uz_phone(phone)
     if User.objects.filter(phone=phone).exists():
         raise ValidationError({"phone": "Bu telefon raqami allaqachon ro‘yxatdan o‘tgan."})
-    try:
-        password_validation.validate_password(password)
-    except DjangoValidationError as error:
-        raise ValidationError({"password": list(error.messages)}) from error
+    validate_user_password(password)
 
     consume_registration_otp(phone, code)
     try:
@@ -179,22 +254,31 @@ def register_shop_owner(*, phone: str, code: str, password: str) -> User:
 
 
 def login_user(
-    *, phone: str, password: str, scope: str, ip_address: str, complete: bool = True
+    *, phone: str, password: str, scope: str, ip_address: str
 ) -> User:
     phone = normalize_uz_phone(phone)
     now = timezone.now()
     error_message = None
     authenticated_user = None
     with transaction.atomic():
-        attempt, _ = LoginAttempt.objects.select_for_update().get_or_create(
-            phone=phone, ip_address=ip_address, scope=scope
+        phone_attempt, _ = LoginAttempt.objects.select_for_update().get_or_create(
+            phone=phone, ip_address="0.0.0.0", scope="phone"
         )
-        if attempt.blocked_until and attempt.blocked_until > now:
-            error_message = "Kirish vaqtincha bloklangan. Keyinroq qayta urinib ko‘ring."
+        ip_attempt, _ = LoginAttempt.objects.select_for_update().get_or_create(
+            phone="__ip__", ip_address=ip_address, scope="ip"
+        )
+        attempts = (phone_attempt, ip_attempt)
+        if any(attempt.blocked_until and attempt.blocked_until > now for attempt in attempts):
+            error_message = "Telefon yoki parol noto‘g‘ri."
         else:
-            if attempt.blocked_until and attempt.blocked_until <= now:
-                attempt.failures = 0
-                attempt.blocked_until = None
+            for attempt in attempts:
+                if (
+                    attempt.blocked_until and attempt.blocked_until <= now
+                ) or attempt.updated_at <= now - timedelta(
+                    minutes=settings.AUTH_LOGIN_BLOCK_MINUTES
+                ):
+                    attempt.failures = 0
+                    attempt.blocked_until = None
 
             user = authenticate(username=phone, password=password)
             valid_role = user is not None and (
@@ -203,40 +287,39 @@ def login_user(
                 else user.role != User.Role.SHOP_OWNER
             )
             if not valid_role or user.is_blocked or user.is_deleted:
-                attempt.failures += 1
-                if attempt.failures >= settings.AUTH_LOGIN_MAX_FAILURES:
-                    attempt.blocked_until = now + timedelta(
-                        minutes=settings.AUTH_LOGIN_BLOCK_MINUTES
-                    )
-                attempt.save(update_fields=("failures", "blocked_until", "updated_at"))
+                for attempt in attempts:
+                    attempt.failures += 1
+                    if attempt.failures >= settings.AUTH_LOGIN_MAX_FAILURES:
+                        attempt.blocked_until = now + timedelta(
+                            minutes=settings.AUTH_LOGIN_BLOCK_MINUTES
+                        )
+                    attempt.save(update_fields=("failures", "blocked_until", "updated_at"))
                 audit_event(
                     f"{scope}_login_failed",
                     user=User.objects.filter(phone=phone).first(),
                     entity_type="Login",
                 )
-                error_message = (
-                    "5 ta noto‘g‘ri urinishdan so‘ng kirish 15 daqiqaga bloklandi."
-                    if attempt.blocked_until
-                    else "Telefon raqami yoki parol noto‘g‘ri."
-                )
+                error_message = "Telefon yoki parol noto‘g‘ri."
             else:
-                if complete:
-                    LoginAttempt.objects.filter(
-                        phone=phone, ip_address=ip_address, scope=scope
-                    ).delete()
-                    user.last_login = now
-                    user.save(update_fields=("last_login",))
-                    audit_event(f"{scope}_login_succeeded", user=user, entity_type="Login")
+                LoginAttempt.objects.filter(
+                    Q(phone=phone, scope="phone")
+                    | Q(phone="__ip__", ip_address=ip_address, scope="ip")
+                ).delete()
+                user.last_login = now
+                user.save(update_fields=("last_login",))
+                audit_event(f"{scope}_login_succeeded", user=user, entity_type="Login")
                 authenticated_user = user
 
     if error_message:
         raise AuthenticationFailed(error_message)
     if authenticated_user is None:
-        raise AuthenticationFailed("Telefon raqami yoki parol noto‘g‘ri.")
+        raise AuthenticationFailed("Telefon yoki parol noto‘g‘ri.")
     return authenticated_user
 
 
-def request_account_deletion(*, user: User, password: str, reason: str, reason_other: str):
+def request_account_deletion(
+    *, user: User, password: str, code: str, reason: str, reason_other: str
+):
     if not user.check_password(password):
         raise ValidationError({"password": "Parol noto‘g‘ri."})
     if reason == DeletionRequest.Reason.OTHER and not reason_other.strip():
@@ -262,6 +345,9 @@ def request_account_deletion(*, user: User, password: str, reason: str, reason_o
         locked_user = User.objects.select_for_update().get(pk=user.pk)
         if locked_user.deletion_requests.filter(status=DeletionRequest.Status.PENDING).exists():
             raise ValidationError({"account": "Akkauntni o‘chirish so‘rovi allaqachon yuborilgan."})
+        _consume_otp(
+            locked_user.phone, PhoneOTP.Purpose.ACCOUNT_DELETION, code
+        )
         deletion = DeletionRequest.objects.create(
             user=locked_user, reason=reason, reason_other=reason_other.strip()
         )
@@ -272,12 +358,13 @@ def request_account_deletion(*, user: User, password: str, reason: str, reason_o
     return deletion
 
 
-def restore_account(*, phone: str, password: str) -> User:
+def restore_account(*, phone: str, password: str, code: str) -> User:
     phone = normalize_uz_phone(phone)
     user = User.objects.filter(phone=phone, role=User.Role.SHOP_OWNER).first()
     if user is None or not user.check_password(password):
         raise AuthenticationFailed("Telefon raqami yoki parol noto‘g‘ri.")
     with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=user.pk)
         deletion = (
             user.deletion_requests.select_for_update()
             .filter(status=DeletionRequest.Status.PENDING)
@@ -286,6 +373,7 @@ def restore_account(*, phone: str, password: str) -> User:
         )
         if deletion is None or deletion.scheduled_for <= timezone.now():
             raise ValidationError({"account": "Akkauntni tiklash muddati tugagan."})
+        _consume_otp(phone, PhoneOTP.Purpose.ACCOUNT_DELETION, code)
         deletion.status = DeletionRequest.Status.CANCELLED
         deletion.processed_at = timezone.now()
         deletion.save(update_fields=("status", "processed_at"))

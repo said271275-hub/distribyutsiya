@@ -57,7 +57,7 @@ bo‘lishi mumkin. `company_admin` va `driver` uchun kompaniya majburiy.
 | Jadval | Muhim maydonlar va cheklovlar |
 |---|---|
 | `Company` | `id`, `name`, `logo`, `brand_color`, `contact_phone`, `is_active`, vaqt tamg‘alari |
-| `User` | `id`, `phone` (unikal), `company` (company_admin/driver uchun majburiy; super_admin/shop_owner uchun bo‘sh), `role`, `is_active`, `is_blocked`, o‘chirish holati, `is_staff`/`is_superuser`, `auth_version` |
+| `User` | `id`, `phone` (unikal), `company` (company_admin/driver uchun majburiy; super_admin/shop_owner uchun bo‘sh), `role`, `is_active`, `is_blocked`, `must_change_password`, o‘chirish holati, `is_staff`/`is_superuser`, `auth_version` |
 | `Shop` | `owner` → User (unikal: bitta akkaunt ko‘pi bilan bitta do‘konga ega), `name`, `phone_primary` (unikal), `phone_secondary` (ixtiyoriy; faqat asosiy raqam unikal), `address`, `district`, `latitude`, `longitude`, `status` |
 | `CompanyShopLink` | `company`, `shop`, `is_active`, yaratilgan vaqt; `(company, shop)` unikal |
 | `Product` | `company`, `name`, `image`, `unit` (`piece`/`box`/`block`), `price`, `is_active` |
@@ -114,12 +114,19 @@ biriktirilgan reys doirasida, `SO` esa faqat o‘z do‘koni doirasida ishlaydi.
 | `/api/auth/register/` | POST | Ommaviy | `phone`, `code`, `password` | `detail`, `user` (`shop_owner`) |
 | `/api/auth/login/` | POST | Ommaviy | `phone`, `password` | `access`, `user`; refresh token HttpOnly cookie’da |
 | `/api/auth/staff/login/` | POST | Ommaviy | `phone`, `password` | `access`, `user`; faqat xodim rollari |
+| `/api/auth/password/reset/otp/` | POST | Ommaviy | `phone` | `detail`; mavjud akkaunt bo‘lsa SMS yuboriladi |
+| `/api/auth/password/reset/` | POST | Ommaviy | `phone`, `code`, `password`, `password_confirm` | `detail`; oldingi tokenlar bekor qilinadi |
+| `/api/auth/password/change/` | POST | Kirgan foydalanuvchi | `current_password`, `password`, `password_confirm` | yangi `access`, `user`; oldingi tokenlar bekor qilinadi |
+| `/api/auth/phone/change/otp/` | POST | Kirgan foydalanuvchi | `phone` | yangi raqamga SMS kodi |
+| `/api/auth/phone/change/` | POST | Kirgan foydalanuvchi | `phone`, `code` | yangi `access`, `user`; oldingi tokenlar bekor qilinadi |
 | `/api/auth/refresh/` | POST | Refresh cookie egasi | CSRF header va refresh cookie | yangi `access`; refresh cookie rotatsiyasi |
 | `/api/auth/logout/` | POST | Refresh cookie egasi | CSRF header va refresh cookie | `204`; refresh token bekor qilinadi |
 | `/api/auth/me/` | GET | Kirgan foydalanuvchi | Bearer access token | `id`, `phone`, `role`, `company_id`, `shops[]` |
 | `/api/auth/me/deletion/` | GET | Kirgan foydalanuvchi | Bearer access token | `pending`, sabab va muddat (`pending=true holatda`) |
-| `/api/auth/me/deletion/` | POST | Faqat `shop_owner` | `reason`, `reason_other?`, `password`, CSRF header | `detail`, `scheduled_for`; refresh cookie o‘chiriladi |
-| `/api/auth/restore/` | POST | Ommaviy | `phone`, `password` | `detail`, `access`, `user`; pending so‘rovni bekor qiladi |
+| `/api/auth/me/deletion/otp/` | POST | Faqat `shop_owner` | CSRF header | akkaunt o‘chirish SMS kodi |
+| `/api/auth/me/deletion/` | POST | Faqat `shop_owner` | `reason`, `reason_other?`, `password`, `code`, CSRF header | `detail`, `scheduled_for`; refresh cookie o‘chiriladi |
+| `/api/auth/restore/otp/` | POST | Ommaviy | `phone`, `password` | akkaunt tiklash SMS kodi |
+| `/api/auth/restore/` | POST | Ommaviy | `phone`, `password`, `code` | `detail`, `access`, `user`; pending so‘rovni bekor qiladi |
 | `/api/v1/companies/` | GET, POST | GET: SA; POST: SA | POST: `name`, `logo?`, `brand_color?`, `contact_phone?` | `id`, kompaniya maydonlari |
 | `/api/v1/companies/{id}/` | GET, PATCH | SA; CA faqat o‘z kompaniyasini | PATCH: `name?`, `logo?`, `brand_color?`, `contact_phone?`, `is_active?` | kompaniya maydonlari |
 | `/api/v1/users/` | GET, POST | SA; CA o‘z kompaniyasi foydalanuvchilari | POST: `phone`, `role`, `company_id?`, `is_active?` | `id`, `phone`, `role`, `is_active`, `is_blocked`, `company_id?` |

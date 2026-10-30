@@ -163,7 +163,7 @@ class OrderSmsNotificationTests(TestCase):
         self.assertEqual(notification.state, SmsOutbox.State.SUPPRESSED)
         provider.assert_not_called()
 
-    def test_disabled_order_notices_do_not_disable_login_otp(self):
+    def test_disabled_order_notices_do_not_disable_password_login(self):
         from rest_framework.test import APIClient
 
         self.shop.sms_notifications_enabled = False
@@ -175,13 +175,13 @@ class OrderSmsNotificationTests(TestCase):
             return_value=provider,
         ):
             response = APIClient().post(
-                "/api/auth/login/otp/",
+                "/api/auth/login/",
                 {"phone": self.owner.phone, "password": "Temporary-password-1!"},
                 format="json",
             )
 
-        self.assertEqual(response.status_code, 202, response.data)
-        provider.send.assert_called_once()
+        self.assertEqual(response.status_code, 200, response.data)
+        provider.send.assert_not_called()
 
     def test_mismatched_company_and_shop_never_sends_sms(self):
         other_company = Company.objects.create(name="Kompaniya B")

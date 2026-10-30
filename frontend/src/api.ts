@@ -9,6 +9,7 @@ export type AuthUser = {
   phone: string
   role: UserRole
   company_id: number | null
+  must_change_password: boolean
 }
 
 export type AuthResponse = {
@@ -86,13 +87,13 @@ type RetriableConfig = InternalAxiosRequestConfig & { _retry?: boolean }
 
 const publicAuthPaths = [
   '/auth/login/',
-  '/auth/login/otp/',
   '/auth/staff/login/',
-  '/auth/staff/login/otp/',
   '/auth/register/',
   '/auth/register/otp/',
   '/auth/restore/',
   '/auth/restore/otp/',
+  '/auth/password/reset/',
+  '/auth/password/reset/otp/',
   '/auth/refresh/',
 ]
 

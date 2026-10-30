@@ -17,6 +17,11 @@ class CookieAwareJWTAuthentication(JWTAuthentication):
         result = super().authenticate(request)
         if result is not None:
             user, token = result
+            if (
+                user.must_change_password
+                and not request.path.endswith(("/auth/me/", "/auth/password/change/"))
+            ):
+                raise AuthenticationFailed("Birinchi kirishda parolni o‘zgartiring.")
             request.company = user.company
             request.company_id = user.company_id
             return user, token

@@ -160,19 +160,13 @@ class DemoSeedCommandTests(TestCase):
         user = User.objects.get(phone="+998900009901")
         self.assertTrue(user.check_password("Demo-staff-password-123!"))
         client = APIClient()
-        requested = client.post(
-            "/api/auth/staff/login/otp/",
-            {"phone": user.phone, "password": "Demo-staff-password-123!"},
-            format="json",
-        )
-        self.assertEqual(requested.status_code, 202, requested.data)
         response = client.post(
             "/api/auth/staff/login/",
             {
                 "phone": user.phone,
                 "password": "Demo-staff-password-123!",
-                "code": "123456",
             },
             format="json",
         )
         self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(response.data["user"]["must_change_password"])

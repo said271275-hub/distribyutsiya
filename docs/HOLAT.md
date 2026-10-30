@@ -11,7 +11,8 @@
 - **4C-3 — yozilgan:** mahsulot va narxlar, do‘konlar, transport va haydovchilar, xodimlar, qarz va to‘lov sahifalari mavjud. Sahifalardagi yaratish, tahrirlash va to‘lov kiritish foydalanuvchi oqimi sinovlari yetishmaydi.
 - **5-bosqich, 1-bo‘lak — qisman:** haydovchi oynasi o‘z reyslarini, to‘xtashlarini va yuklash ro‘yxatini ko‘rsatadi. Yetkazilgan deb belgilash, qisman yetkazish, to‘lov va qaytarilgan idishlarni qayd etish hali bajarilmagan.
 - **5-bosqich, PWA va oflayn ish — boshlanmagan:** ilovani o‘rnatish, oflayn foydalanish, harakatlarni navbatga olish va keyin sinxronlash yo‘q.
-- **6-bosqich, SMS (Eskiz) — bajarildi:** ro‘yxatdan o‘tish va kirish OTP kodi,
+- **6-bosqich, SMS (Eskiz) — bajarildi:** ro‘yxatdan o‘tish, parolni tiklash,
+  telefonni almashtirish va akkauntni o‘chirish/tiklash OTP kodi,
   buyurtma holati SMS’lari, do‘konchi uchun bildirishnoma sozlamasi va
   xabarlarni navbatdan qayta yuborish qo‘shildi. Eskiz haqiqiy chaqiruvi
   maxfiy muhit sozlamalari va tasdiqlangan SMS matnlari mavjud bo‘lganda ishlaydi.

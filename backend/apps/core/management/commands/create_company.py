@@ -64,6 +64,7 @@ class Command(BaseCommand):
                         phone=phone,
                         role=User.Role.COMPANY_ADMIN,
                         company=company,
+                        must_change_password=True,
                     )
                     validate_password(password, user=user)
                     user.full_clean(exclude=("password",))

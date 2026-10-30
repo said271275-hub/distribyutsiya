@@ -49,7 +49,12 @@ class Command(BaseCommand):
         if password != password_confirm:
             raise CommandError("Parollar mos kelmadi.")
 
-        user = User(phone=phone, role=options["role"], company=company)
+        user = User(
+            phone=phone,
+            role=options["role"],
+            company=company,
+            must_change_password=True,
+        )
         try:
             validate_password(password, user=user)
             user.full_clean(exclude=("password",))

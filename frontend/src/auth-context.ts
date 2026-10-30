@@ -6,7 +6,9 @@ export type LoginScope = 'shop' | 'staff'
 export type AuthContextValue = {
   user: AuthUser | null
   loading: boolean
-  login: (phone: string, password: string, scope: LoginScope, code: string) => Promise<AuthUser>
+  login: (phone: string, password: string, scope: LoginScope) => Promise<AuthUser>
+  changePassword: (currentPassword: string, password: string, passwordConfirm: string) => Promise<AuthUser>
+  changePhone: (phone: string, code: string) => Promise<AuthUser>
   restore: (phone: string, password: string, code: string) => Promise<AuthUser>
   logout: () => Promise<void>
   completeDeletion: () => void

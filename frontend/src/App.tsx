@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Controller, useForm, type Control } from 'react-hook-form'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
@@ -265,17 +265,20 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
       defaultValues: { phone: '', password: '' },
     })
 
-  if (user) return <Navigate to={roleHomes[user.role]} replace />
+  if (user) {
+    return (
+      <Navigate
+        to={user.must_change_password ? '/password/change' : roleHomes[user.role]}
+        replace
+      />
+    )
+  }
 
   const submit = handleSubmit(async (values) => {
     setFormError('')
     try {
-      if (!codeRequested) {
-        const path = restoreMode
-          ? '/auth/restore/otp/'
-          : staff
-            ? '/auth/staff/login/otp/'
-            : '/auth/login/otp/'
+      if (restoreMode && !codeRequested) {
+        const path = '/auth/restore/otp/'
         await api.post(path, {
           phone: normalizePhone(values.phone),
           password: values.password,
@@ -283,7 +286,7 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
         setCodeRequested(true)
         return
       }
-      if (!/^\d{6}$/.test(loginCode)) {
+      if (restoreMode && !/^\d{6}$/.test(loginCode)) {
         setFormError(t('error.codeInvalid'))
         return
       }
@@ -293,9 +296,13 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
           normalizePhone(values.phone),
           values.password,
           staff ? 'staff' : 'shop',
-          loginCode,
         )
-      navigate(roleHomes[signedInUser.role], { replace: true })
+      navigate(
+        signedInUser.must_change_password
+          ? '/password/change'
+          : roleHomes[signedInUser.role],
+        { replace: true },
+      )
     } catch (error) {
       setFormError(apiErrorMessage(error, t('error.login')))
     }
@@ -304,7 +311,7 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
   return (
     <AuthShell mode={staff ? 'staff' : 'shop'}>
       <div className="auth-heading">
-        <DevOtpBadge />
+        {restoreMode && <DevOtpBadge />}
         <span className="section-kicker">{t(staff ? 'auth.staffArea' : 'auth.welcome')}</span>
         <h2>{t(restoreMode ? 'auth.restoreTitle' : staff ? 'auth.staffTitle' : 'auth.loginTitle')}</h2>
         <p>
@@ -313,12 +320,8 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
               ? t('auth.codeSent')
               : t('auth.restoreDescription')
             : staff
-              ? codeRequested
-                ? t('auth.codeSent')
-                : t('auth.staffDescription')
-              : codeRequested
-                ? t('auth.codeSent')
-                : t('auth.loginDescription')}
+              ? t('auth.staffDescription')
+              : t('auth.loginDescription')}
         </p>
       </div>
 
@@ -327,6 +330,9 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
       )}
       {params.get('deleted') && (
         <div className="notice warning-notice"><span>!</span> {t('auth.deletedNotice')}</div>
+      )}
+      {params.get('reset') && (
+        <div className="notice success-notice"><span>✓</span> {t('auth.passwordResetDone')}</div>
       )}
 
       {!staff && (
@@ -344,13 +350,13 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
             <input
               {...register('password')}
               type="password"
-              autoComplete={restoreMode ? 'current-password' : staff ? 'current-password' : 'current-password'}
+              autoComplete="current-password"
               placeholder={t('common.passwordPlaceholder')}
               className="form-input"
             />
           </span>
         </FormField>
-        {codeRequested && !restoreMode && (
+        {codeRequested && restoreMode && (
           <FormField label={t('common.smsCode')} hint={t('common.codeHint')}>
             <input
               type="text"
@@ -367,12 +373,17 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
         {formError && <div className="form-alert" role="alert">{formError}</div>}
         <button className="primary-button" disabled={isSubmitting} type="submit">
           {isSubmitting ? <span className="button-spinner" /> : null}
-          {isSubmitting ? t('auth.submitChecking') : restoreMode ? codeRequested ? t('auth.restore') : t('auth.sendRestoreCode') : codeRequested ? t('auth.login') : t('auth.sendCode')}
+          {isSubmitting ? t('auth.submitChecking') : restoreMode ? codeRequested ? t('auth.restore') : t('auth.sendRestoreCode') : t('auth.login')}
           {!isSubmitting && <span aria-hidden="true">→</span>}
         </button>
       </form>
 
       <div className="auth-extra">
+        {!restoreMode && (
+          <button type="button" className="text-button" onClick={() => navigate('/password/reset')}>
+            {t('auth.forgotPassword')}
+          </button>
+        )}
         {!staff && (
           <button type="button" className="text-button" onClick={() => { setRestoreMode(!restoreMode); setCodeRequested(false); setLoginCode(''); setFormError('') }}>
             {restoreMode ? t('auth.restoreLink') : t('auth.cancelDeletionLink')}
@@ -392,6 +403,234 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
         </div>
       )}
       <div className="mobile-story-note"><span className="eyebrow-dot" /> {t('auth.mobileNote')}</div>
+    </AuthShell>
+  )
+}
+
+function PasswordResetPage() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [phone, setPhone] = useState('')
+  const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [codeRequested, setCodeRequested] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const requestCode = async () => {
+    const parsedPhone = createPhoneSchema(t).safeParse(phone)
+    if (!parsedPhone.success) {
+      setFormError(parsedPhone.error.issues[0]?.message ?? t('error.phoneCheck'))
+      return
+    }
+    setFormError('')
+    setIsSubmitting(true)
+    try {
+      await api.post('/auth/password/reset/otp/', { phone: normalizePhone(phone) })
+      setCodeRequested(true)
+    } catch (error) {
+      setFormError(apiErrorMessage(error, t('error.request')))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setFormError('')
+    if (!codeRequested) {
+      await requestCode()
+      return
+    }
+    if (!/^\d{6}$/.test(code)) {
+      setFormError(t('error.codeInvalid'))
+      return
+    }
+    if (password.length < 8) {
+      setFormError(t('error.passwordTooShort'))
+      return
+    }
+    if (password !== passwordConfirm) {
+      setFormError(t('error.passwordMismatch'))
+      return
+    }
+    setIsSubmitting(true)
+    try {
+      await api.post('/auth/password/reset/', {
+        phone: normalizePhone(phone),
+        code,
+        password,
+        password_confirm: passwordConfirm,
+      })
+      navigate('/login?reset=1', { replace: true })
+    } catch (error) {
+      setFormError(apiErrorMessage(error, t('error.request')))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <AuthShell>
+      <div className="auth-heading">
+        <span className="section-kicker">{t('auth.welcome')}</span>
+        <h2>{t('auth.resetPasswordTitle')}</h2>
+        <p>{t('auth.resetPasswordDescription')}</p>
+      </div>
+      <form className="auth-form" onSubmit={(event) => { void submit(event) }} noValidate>
+        <FormField label={t('auth.newPhone')}>
+          <input
+            type="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(event) => setPhone(formatPhoneInput(event.target.value))}
+            placeholder="+998 90 123 45 67"
+            className="form-input"
+          />
+        </FormField>
+        {!codeRequested ? null : (
+          <>
+            <FormField label={t('common.smsCode')} hint={t('common.codeHint')}>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="form-input otp-input"
+              />
+            </FormField>
+            <FormField label={t('auth.newPassword')}>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="form-input"
+              />
+            </FormField>
+            <FormField label={t('auth.confirmNewPassword')}>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={passwordConfirm}
+                onChange={(event) => setPasswordConfirm(event.target.value)}
+                className="form-input"
+              />
+            </FormField>
+          </>
+        )}
+        {formError && <div className="form-alert" role="alert">{formError}</div>}
+        <button
+          className="primary-button"
+          disabled={isSubmitting}
+          type="submit"
+        >
+          {isSubmitting ? <span className="button-spinner" /> : null}
+          {isSubmitting
+            ? t('auth.submitChecking')
+            : codeRequested
+              ? t('auth.resetPassword')
+              : t('auth.sendResetCode')}
+          {!isSubmitting && <span aria-hidden="true">→</span>}
+        </button>
+      </form>
+      <div className="auth-extra">
+        <Link to="/login">{t('auth.backToLogin')}</Link>
+      </div>
+    </AuthShell>
+  )
+}
+
+function PasswordChangePage() {
+  const { t } = useTranslation()
+  const { changePassword, logout, user } = useAuth()
+  const navigate = useNavigate()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [formError, setFormError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setFormError('')
+    if (password.length < 8) {
+      setFormError(t('error.passwordTooShort'))
+      return
+    }
+    if (password !== passwordConfirm) {
+      setFormError(t('error.passwordMismatch'))
+      return
+    }
+    setIsSubmitting(true)
+    try {
+      const updatedUser = await changePassword(currentPassword, password, passwordConfirm)
+      navigate(roleHomes[updatedUser.role], { replace: true })
+    } catch (error) {
+      setFormError(apiErrorMessage(error, t('error.request')))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const signOut = async () => {
+    try {
+      await logout()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      setFormError(apiErrorMessage(error, t('error.logout')))
+    }
+  }
+
+  return (
+    <AuthShell mode={user?.role === 'shop_owner' ? 'shop' : 'staff'}>
+      <div className="auth-heading">
+        <span className="section-kicker">{t('auth.welcome')}</span>
+        <h2>{t('auth.changePasswordTitle')}</h2>
+        <p>{t('auth.changePasswordDescription')}</p>
+      </div>
+      <form className="auth-form" onSubmit={(event) => { void submit(event) }} noValidate>
+        <FormField label={t('common.currentPassword')}>
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            className="form-input"
+          />
+        </FormField>
+        <FormField label={t('auth.newPassword')}>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="form-input"
+          />
+        </FormField>
+        <FormField label={t('auth.confirmNewPassword')}>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={passwordConfirm}
+            onChange={(event) => setPasswordConfirm(event.target.value)}
+            className="form-input"
+          />
+        </FormField>
+        {formError && <div className="form-alert" role="alert">{formError}</div>}
+        <button className="primary-button" disabled={isSubmitting} type="submit">
+          {isSubmitting ? <span className="button-spinner" /> : null}
+          {isSubmitting ? t('auth.submitChecking') : t('auth.changePassword')}
+        </button>
+      </form>
+      <div className="auth-extra">
+        <button type="button" className="text-button" onClick={() => void signOut()}>
+          {t('nav.logout')}
+        </button>
+      </div>
     </AuthShell>
   )
 }
@@ -525,10 +764,19 @@ function RegisterPage() {
 
 function ProfilePage() {
   const { language, t } = useTranslation()
-  const { user, completeDeletion } = useAuth()
+  const { user, completeDeletion, changePhone } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [formError, setFormError] = useState('')
+  const [deletionCode, setDeletionCode] = useState('')
+  const [deletionCodeRequested, setDeletionCodeRequested] = useState(false)
+  const [deletionCodeSending, setDeletionCodeSending] = useState(false)
+  const [newPhone, setNewPhone] = useState('')
+  const [phoneCode, setPhoneCode] = useState('')
+  const [phoneCodeRequested, setPhoneCodeRequested] = useState(false)
+  const [phoneCodeSending, setPhoneCodeSending] = useState(false)
+  const [phoneError, setPhoneError] = useState('')
+  const [phoneMessage, setPhoneMessage] = useState('')
   const deletionSchema = useMemo(() => createDeletionSchema(t), [t])
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } =
     useForm<DeletionValues>({
@@ -547,8 +795,12 @@ function ProfilePage() {
 
   const submit = handleSubmit(async (values) => {
     setFormError('')
+    if (!/^\d{6}$/.test(deletionCode)) {
+      setFormError(t('error.codeInvalid'))
+      return
+    }
     try {
-      await api.post('/auth/me/deletion/', values)
+      await api.post('/auth/me/deletion/', { ...values, code: deletionCode })
       await queryClient.invalidateQueries({ queryKey: ['account-deletion'] })
       completeDeletion()
       navigate('/login?deleted=1', { replace: true })
@@ -556,6 +808,56 @@ function ProfilePage() {
       setFormError(apiErrorMessage(error, t('error.deletion')))
     }
   })
+
+  const sendDeletionCode = async () => {
+    setFormError('')
+    setDeletionCodeSending(true)
+    try {
+      await api.post('/auth/me/deletion/otp/')
+      setDeletionCodeRequested(true)
+    } catch (error) {
+      setFormError(apiErrorMessage(error, t('error.request')))
+    } finally {
+      setDeletionCodeSending(false)
+    }
+  }
+
+  const sendPhoneCode = async () => {
+    const parsedPhone = createPhoneSchema(t).safeParse(newPhone)
+    if (!parsedPhone.success) {
+      setPhoneError(parsedPhone.error.issues[0]?.message ?? t('error.phoneCheck'))
+      return
+    }
+    setPhoneError('')
+    setPhoneMessage('')
+    setPhoneCodeSending(true)
+    try {
+      await api.post('/auth/phone/change/otp/', { phone: normalizePhone(newPhone) })
+      setPhoneCodeRequested(true)
+    } catch (error) {
+      setPhoneError(apiErrorMessage(error, t('error.request')))
+    } finally {
+      setPhoneCodeSending(false)
+    }
+  }
+
+  const submitPhoneChange = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setPhoneError('')
+    if (!/^\d{6}$/.test(phoneCode)) {
+      setPhoneError(t('error.codeInvalid'))
+      return
+    }
+    try {
+      await changePhone(normalizePhone(newPhone), phoneCode)
+      setNewPhone('')
+      setPhoneCode('')
+      setPhoneCodeRequested(false)
+      setPhoneMessage(t('profile.phoneUpdated'))
+    } catch (error) {
+      setPhoneError(apiErrorMessage(error, t('error.request')))
+    }
+  }
 
   return (
     <DashboardShell active="profile">
@@ -578,6 +880,54 @@ function ProfilePage() {
           <div><dt>{t('profile.userType')}</dt><dd><span className="role-pill">{user ? t(roleLabelKeys[user.role]) : ''}</span></dd></div>
           <div><dt>{t('profile.company')}</dt><dd>{user?.company_id ? `${t('profile.company')} #${user.company_id}` : t('profile.independentShop')}</dd></div>
         </dl>
+      </section>
+
+      <section className="profile-card">
+        <div className="card-title-row">
+          <div className="card-icon">⌕</div>
+          <div><h2>{t('auth.phoneChangeTitle')}</h2><p>{t('auth.phoneChangeDescription')}</p></div>
+        </div>
+        <form className="deletion-form" onSubmit={(event) => void submitPhoneChange(event)} noValidate>
+          <FormField label={t('auth.newPhone')}>
+            <input
+              type="tel"
+              autoComplete="tel"
+              value={newPhone}
+              onChange={(event) => setNewPhone(formatPhoneInput(event.target.value))}
+              placeholder="+998 90 123 45 67"
+              className="form-input"
+            />
+          </FormField>
+          {phoneCodeRequested && (
+            <FormField label={t('common.smsCode')} hint={t('common.codeHint')}>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={phoneCode}
+                onChange={(event) => setPhoneCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="form-input otp-input"
+              />
+            </FormField>
+          )}
+          {phoneError && <div className="form-alert" role="alert">{phoneError}</div>}
+          {phoneMessage && <div className="notice success-notice" role="status">{phoneMessage}</div>}
+          <div className="deletion-actions">
+            {!phoneCodeRequested ? (
+              <button
+                className="primary-button"
+                disabled={phoneCodeSending}
+                type="button"
+                onClick={() => void sendPhoneCode()}
+              >
+                {phoneCodeSending ? t('auth.submitChecking') : t('auth.sendPhoneCode')}
+              </button>
+            ) : (
+              <button className="primary-button" type="submit">{t('auth.changePhone')}</button>
+            )}
+          </div>
+        </form>
       </section>
 
       {user?.role === 'shop_owner' && (
@@ -626,11 +976,30 @@ function ProfilePage() {
                 <FormField label={t('common.confirmPassword')} error={errors.password?.message}>
                   <input {...register('password')} type="password" autoComplete="current-password" className="form-input" placeholder={t('common.currentPassword')} />
                 </FormField>
+                {deletionCodeRequested && (
+                  <FormField label={t('auth.deletionCode')} hint={t('common.codeHint')}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={deletionCode}
+                      onChange={(event) => setDeletionCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                      className="form-input otp-input"
+                    />
+                  </FormField>
+                )}
                 {formError && <div className="form-alert" role="alert">{formError}</div>}
                 <div className="deletion-actions">
-                  <button className="danger-button" disabled={isSubmitting} type="submit">
-                    {isSubmitting ? <span className="button-spinner" /> : null} {t('profile.submitDeletion')}
-                  </button>
+                  {!deletionCodeRequested ? (
+                    <button className="primary-button" disabled={deletionCodeSending} type="button" onClick={() => void sendDeletionCode()}>
+                      {deletionCodeSending ? <span className="button-spinner" /> : null} {t('auth.sendDeletionCode')}
+                    </button>
+                  ) : (
+                    <button className="danger-button" disabled={isSubmitting} type="submit">
+                      {isSubmitting ? <span className="button-spinner" /> : null} {t('profile.submitDeletion')}
+                    </button>
+                  )}
                   <span>{t('profile.restoreWithinDays')}</span>
                 </div>
               </form>
@@ -720,6 +1089,12 @@ function ProtectedRoute({ children, roles }: { children: ReactNode; roles?: User
     const staff = location.pathname !== '/shop' && location.pathname !== '/profile'
     return <Navigate to={staff ? '/staff/login' : '/login'} replace state={{ from: location }} />
   }
+  if (user.must_change_password && location.pathname !== '/password/change') {
+    return <Navigate to="/password/change" replace />
+  }
+  if (!user.must_change_password && location.pathname === '/password/change') {
+    return <Navigate to={roleHomes[user.role]} replace />
+  }
   if (!canAccessRoles(user.role, roles)) {
     return <Navigate to={roleHomes[user.role]} replace />
   }
@@ -730,7 +1105,16 @@ function IndexRedirect() {
   const { t } = useTranslation()
   const { user, loading } = useAuth()
   if (loading) return <main className="full-loader"><span className="button-spinner" /> {t('common.loading')}</main>
-  return <Navigate to={user ? roleHomes[user.role] : '/login'} replace />
+  return (
+    <Navigate
+      to={user
+        ? user.must_change_password
+          ? '/password/change'
+          : roleHomes[user.role]
+        : '/login'}
+      replace
+    />
+  )
 }
 
 function App() {
@@ -741,6 +1125,8 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/staff/login" element={<LoginPage staff />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/password/reset" element={<PasswordResetPage />} />
+      <Route path="/password/change" element={<ProtectedRoute><PasswordChangePage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute roles={['super_admin']}><RoleLandingPage /></ProtectedRoute>} />
       <Route path="/company/*" element={<ProtectedRoute roles={['company_admin']}><Suspense fallback={<main className="full-loader">{t('common.loading')}</main>}><DispatcherPanel /></Suspense></ProtectedRoute>} />

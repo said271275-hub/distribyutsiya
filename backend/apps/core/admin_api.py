@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, time
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.db.models import F, Prefetch, Q, Sum
 from django.forms.models import model_to_dict
@@ -20,6 +19,7 @@ from drf_spectacular.utils import extend_schema
 from drf_spectacular.utils import extend_schema_field
 
 from apps.accounts.models import User
+from apps.accounts.services import validate_user_password
 from apps.audit.models import AuditLog
 from apps.catalog.models import ContainerMovement, Product
 from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
@@ -647,7 +647,11 @@ class DriverAdminViewSet(
 
 
 class StaffSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        error_messages={"min_length": "Parol kamida 8 ta belgidan iborat bo‘lsin."},
+    )
     role = serializers.ChoiceField(choices=(User.Role.COMPANY_ADMIN, User.Role.DRIVER))
 
     class Meta:
@@ -666,7 +670,7 @@ class StaffSerializer(serializers.ModelSerializer):
         return phone
 
     def validate_password(self, value):
-        validate_password(value)
+        validate_user_password(value)
         return value
 
 class StaffAdminViewSet(viewsets.ViewSet):
@@ -696,6 +700,7 @@ class StaffAdminViewSet(viewsets.ViewSet):
                 password=values["password"],
                 company=self.company,
                 role=values["role"],
+                must_change_password=True,
             )
             if user.role == User.Role.DRIVER:
                 profile = DriverProfile(company=self.company, user=user)
@@ -717,6 +722,9 @@ class StaffAdminViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         before = {"phone": user.phone, "role": user.role}
         user = serializer.save()
+        if before["phone"] != user.phone:
+            user.auth_version += 1
+            user.save(update_fields=("auth_version",))
         audit(request.user, self.company, "update", user, before, {
             "phone": user.phone, "role": user.role,
         })
@@ -735,7 +743,8 @@ class StaffAdminViewSet(viewsets.ViewSet):
         before = {"auth_version": user.auth_version}
         user.set_password(serializer.validated_data["password"])
         user.auth_version += 1
-        user.save(update_fields=("password", "auth_version"))
+        user.must_change_password = True
+        user.save(update_fields=("password", "auth_version", "must_change_password"))
         audit(request.user, self.company, "reset_password", user, before, {
             "auth_version": user.auth_version,
         })
@@ -800,15 +809,23 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
 
 
 class StaffPasswordResetSerializer(serializers.Serializer):
-    password = serializers.CharField(write_only=True, min_length=8)
-    password_confirm = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        error_messages={"min_length": "Parol kamida 8 ta belgidan iborat bo‘lsin."},
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        error_messages={"min_length": "Parol kamida 8 ta belgidan iborat bo‘lsin."},
+    )
 
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError({
                 "password_confirm": "Parollar bir-biriga mos kelmadi."
             })
-        validate_password(attrs["password"])
+        validate_user_password(attrs["password"])
         return attrs
 
 

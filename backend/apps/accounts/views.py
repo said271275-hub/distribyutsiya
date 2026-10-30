@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import status
 from django.middleware.csrf import get_token
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
@@ -24,8 +25,11 @@ from apps.accounts.serializers import (
     DeletionRequestSerializer,
     DetailResponseSerializer,
     LoginSerializer,
-    LoginOTPVerifySerializer,
     OTPRequestSerializer,
+    PasswordResetSerializer,
+    PhoneChangeRequestSerializer,
+    PhoneChangeSerializer,
+    ChangePasswordSerializer,
     RegistrationResponseSerializer,
     RefreshResponseSerializer,
     ShopRegistrationSerializer,
@@ -36,11 +40,14 @@ from apps.accounts.services import (
     login_user,
     register_shop_owner,
     request_account_deletion,
+    reset_user_password,
     restore_account,
+    change_user_phone,
+    send_account_deletion_otp,
+    send_password_reset_otp,
     send_registration_otp,
-    send_login_otp,
     send_restore_otp,
-    consume_login_otp,
+    send_phone_change_otp,
 )
 from apps.accounts.authentication import CookieAwareJWTAuthentication
 
@@ -131,14 +138,10 @@ class ShopRegistrationView(PublicAuthView):
 class LoginView(PublicAuthView):
     scope = "shop"
 
-    @extend_schema(request=LoginOTPVerifySerializer, responses={200: AuthResponseSerializer})
+    @extend_schema(request=LoginSerializer, responses={200: AuthResponseSerializer})
     def post(self, request):
-        serializer = LoginOTPVerifySerializer(data=request.data)
+        serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        consume_login_otp(
-            serializer.validated_data["phone"],
-            serializer.validated_data["code"],
-        )
         user = login_user(
             phone=serializer.validated_data["phone"],
             password=serializer.validated_data["password"],
@@ -149,31 +152,78 @@ class LoginView(PublicAuthView):
         return issue_tokens(response, user)
 
 
-class LoginOTPView(PublicAuthView):
-    scope = "shop"
-
-    @extend_schema(request=LoginSerializer, responses={202: DetailResponseSerializer})
-    def post(self, request):
-        serializer = LoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        send_login_otp(
-            phone=serializer.validated_data["phone"],
-            password=serializer.validated_data["password"],
-            scope=self.scope,
-            ip_address=request.META.get("REMOTE_ADDR") or "127.0.0.1",
-        )
-        return Response(
-            {"detail": "Kirish kodi telefon raqamingizga yuborildi."},
-            status=status.HTTP_202_ACCEPTED,
-        )
-
-
 class StaffLoginView(LoginView):
     scope = "staff"
 
 
-class StaffLoginOTPView(LoginOTPView):
-    scope = "staff"
+class PasswordResetOTPView(PublicAuthView):
+    @extend_schema(request=OTPRequestSerializer, responses={202: DetailResponseSerializer})
+    def post(self, request):
+        serializer = OTPRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        send_password_reset_otp(serializer.validated_data["phone"])
+        return Response(
+            {"detail": "Agar akkaunt mavjud bo‘lsa, tiklash kodi yuborildi."},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class PasswordResetView(PublicAuthView):
+    @extend_schema(request=PasswordResetSerializer, responses={200: DetailResponseSerializer})
+    def post(self, request):
+        serializer = PasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        reset_user_password(
+            phone=values["phone"], code=values["code"], password=values["password"]
+        )
+        return Response({"detail": "Parol yangilandi."})
+
+
+class PasswordChangeView(AuthenticatedView):
+    @extend_schema(request=ChangePasswordSerializer, responses={200: AuthResponseSerializer})
+    def post(self, request):
+        serializer = ChangePasswordSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=request.user.pk)
+            if not user.check_password(serializer.validated_data["current_password"]):
+                raise ValidationError({"current_password": "Joriy parol noto‘g‘ri."})
+            user.set_password(serializer.validated_data["password"])
+            user.auth_version += 1
+            user.must_change_password = False
+            user.save(update_fields=("password", "auth_version", "must_change_password"))
+            audit_event("password_changed", user=user, entity_type="Login")
+        return issue_tokens(Response(status=status.HTTP_200_OK), user)
+
+
+class PhoneChangeOTPView(AuthenticatedView):
+    @extend_schema(request=PhoneChangeRequestSerializer, responses={202: DetailResponseSerializer})
+    def post(self, request):
+        serializer = PhoneChangeRequestSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        send_phone_change_otp(user=request.user, phone=serializer.validated_data["phone"])
+        return Response(
+            {"detail": "Tasdiqlash kodi yangi telefon raqamiga yuborildi."},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class PhoneChangeView(AuthenticatedView):
+    @extend_schema(request=PhoneChangeSerializer, responses={200: AuthResponseSerializer})
+    def post(self, request):
+        serializer = PhoneChangeSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        user = change_user_phone(
+            user=request.user,
+            phone=serializer.validated_data["phone"],
+            code=serializer.validated_data["code"],
+        )
+        return issue_tokens(Response(status=status.HTTP_200_OK), user)
 
 
 class RefreshView(PublicAuthView):
@@ -272,6 +322,7 @@ class AccountDeletionView(AuthenticatedView):
             reason=serializer.validated_data["reason"],
             reason_other=serializer.validated_data.get("reason_other", ""),
             password=serializer.validated_data["password"],
+            code=serializer.validated_data["code"],
         )
         response = Response(
             {
@@ -283,14 +334,27 @@ class AccountDeletionView(AuthenticatedView):
         return delete_refresh_cookie(response)
 
 
+class AccountDeletionOTPView(AuthenticatedView):
+    @extend_schema(responses={202: DetailResponseSerializer})
+    def post(self, request):
+        if request.user.role != User.Role.SHOP_OWNER:
+            raise ValidationError({"account": "Akkauntni o‘chirish faqat do‘konchi uchun."})
+        send_account_deletion_otp(request.user)
+        return Response(
+            {"detail": "Tasdiqlash kodi telefon raqamingizga yuborildi."},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
 class AccountRestoreView(PublicAuthView):
     @extend_schema(request=AccountRestoreSerializer, responses=AuthResponseSerializer)
     def post(self, request):
         serializer = AccountRestoreSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
-        consume_login_otp(values["phone"], values["code"])
-        user = restore_account(phone=values["phone"], password=values["password"])
+        user = restore_account(
+            phone=values["phone"], password=values["password"], code=values["code"]
+        )
         response = Response({"detail": "Akkaunt tiklandi."})
         return issue_tokens(response, user)
 

@@ -101,14 +101,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearAuth, queryClient])
 
   const login = useCallback(
-    async (phone: string, password: string, scope: LoginScope, code: string) => {
+    async (phone: string, password: string, scope: LoginScope) => {
       const path = scope === 'staff' ? '/auth/staff/login/' : '/auth/login/'
-      const { data } = await api.post<AuthResponse>(path, { phone, password, code })
+      const { data } = await api.post<AuthResponse>(path, { phone, password })
       localStorage.removeItem('driver-offline-logout')
       setAccessToken(data.access)
       setUser(data.user)
       if (data.user.role === 'driver') await saveDriverOfflineSession(data.user).catch(() => undefined)
       else await clearDriverOfflineData()
+      return data.user
+    },
+    [],
+  )
+
+  const changePassword = useCallback(
+    async (currentPassword: string, password: string, passwordConfirm: string) => {
+      const { data } = await api.post<AuthResponse>('/auth/password/change/', {
+        current_password: currentPassword,
+        password,
+        password_confirm: passwordConfirm,
+      })
+      setAccessToken(data.access)
+      setUser(data.user)
+      if (data.user.role === 'driver') await saveDriverOfflineSession(data.user).catch(() => undefined)
+      return data.user
+    },
+    [],
+  )
+
+  const changePhone = useCallback(
+    async (phone: string, code: string) => {
+      const { data } = await api.post<AuthResponse>('/auth/phone/change/', { phone, code })
+      setAccessToken(data.access)
+      setUser(data.user)
+      if (data.user.role === 'driver') await saveDriverOfflineSession(data.user).catch(() => undefined)
       return data.user
     },
     [],
@@ -139,8 +165,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearAuth, clearDriverShellCache, queryClient])
 
   const value = useMemo(
-    () => ({ user, loading, login, restore, logout, completeDeletion: clearAuth }),
-    [user, loading, login, restore, logout, clearAuth],
+    () => ({
+      user,
+      loading,
+      login,
+      changePassword,
+      changePhone,
+      restore,
+      logout,
+      completeDeletion: clearAuth,
+    }),
+    [user, loading, login, changePassword, changePhone, restore, logout, clearAuth],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

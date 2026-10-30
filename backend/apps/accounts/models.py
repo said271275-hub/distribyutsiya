@@ -28,7 +28,9 @@ class LoginAttempt(models.Model):
 class PhoneOTP(models.Model):
     class Purpose(models.TextChoices):
         REGISTRATION = "registration", "Ro‘yxatdan o‘tish"
-        LOGIN = "login", "Kirish"
+        PASSWORD_RESET = "password_reset", "Parolni tiklash"
+        PHONE_CHANGE = "phone_change", "Telefon raqamini o‘zgartirish"
+        ACCOUNT_DELETION = "account_deletion", "Akkauntni o‘chirish"
 
     phone = models.CharField(max_length=20)
     purpose = models.CharField(max_length=16, choices=Purpose.choices)
@@ -96,6 +98,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_blocked = models.BooleanField(_("Bloklangan"), default=False)
     is_deleted = models.BooleanField(_("O‘chirilgan"), default=False)
     auth_version = models.PositiveIntegerField(_("Kirish kaliti versiyasi"), default=0)
+    must_change_password = models.BooleanField(_("Birinchi kirishda parolni almashtirish"), default=False)
     is_staff = models.BooleanField(_("Admin sahifasiga kirish huquqi"), default=False)
     date_joined = models.DateTimeField(_("Ro‘yxatdan o‘tgan vaqt"), default=timezone.now)
 

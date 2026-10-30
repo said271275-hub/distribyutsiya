@@ -38,11 +38,13 @@ API’lari mavjud. Dispetcher oynasi va xarita bu bosqich doirasiga kirmaydi.
   `POST /api/auth/register/otp/` hamda `POST /api/auth/register/` manzillarida
   ro‘yxatdan o‘tadi.
 - Do‘kon egasi va xodim alohida manzillar orqali tizimga kiradi:
-  avval `/api/auth/login/otp/` yoki `/api/auth/staff/login/otp/` orqali
-  parol tekshiriladi va kod yuboriladi, so‘ng kod
-  `/api/auth/login/` yoki `/api/auth/staff/login/` manzilida tasdiqlanadi.
-  Akkauntni qayta tiklash ham `/api/auth/restore/otp/` orqali kod oladi va
-  `/api/auth/restore/` orqali kodni tekshiradi.
+  `/api/auth/login/` yoki `/api/auth/staff/login/` manzillarida telefon raqami
+  va parol bilan kiradi. SMS-kod parolni tiklash, telefon raqamini almashtirish,
+  ro‘yxatdan o‘tish va akkauntni o‘chirish yoki tiklashda ishlatiladi.
+  Parolni unutganda `/api/auth/password/reset/otp/` va
+  `/api/auth/password/reset/` manzillaridan foydalaniladi.
+  Birinchi kirishda parol almashtirilishi kerak bo‘lgan xodim faqat
+  `/api/auth/me/` va `/api/auth/password/change/` manzillaridan foydalanadi.
   Kompaniya boshqaruvchilari
   xodimlarni kirish huquqi talab qilinadigan `/api/v1/admin/staff/` manzillari
   orqali yaratadi va boshqaradi; xodimlar uchun ochiq o‘z-o‘zini ro‘yxatdan
