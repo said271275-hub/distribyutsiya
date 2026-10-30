@@ -422,8 +422,53 @@ class AdminApiTests(TestCase):
             unit=Product.Unit.PIECE,
             price=Decimal("10.00"),
         )
+        other_price = ShopPrice.objects.create(
+            company=self.other_company,
+            shop=self.other_shop,
+            product=other_product,
+            price=Decimal("9.00"),
+        )
+        other_vehicle = Vehicle.objects.create(
+            company=self.other_company,
+            name="B transporti",
+            plate_number="01B400AA",
+            capacity=Decimal("100.00"),
+        )
+        other_driver_user = User.objects.create_user(
+            phone="+998900004040",
+            company=self.other_company,
+            role=User.Role.DRIVER,
+        )
+        other_driver = DriverProfile.objects.create(
+            company=self.other_company,
+            user=other_driver_user,
+        )
         self.assertEqual(
             self.client.get(f"/api/v1/admin/products/{other_product.pk}/").status_code,
+            404,
+        )
+        for path in (
+            f"/api/v1/admin/shop-prices/{other_price.pk}/",
+            f"/api/v1/admin/shops/{self.other_shop.pk}/",
+            f"/api/v1/admin/vehicles/{other_vehicle.pk}/",
+            f"/api/v1/admin/drivers/{other_driver.pk}/",
+        ):
+            self.assertEqual(self.client.get(path).status_code, 404, path)
+
+        self.assertEqual(
+            self.client.patch(
+                f"/api/v1/admin/vehicles/{other_vehicle.pk}/",
+                {"name": "Ruxsatsiz o‘zgarish"},
+                format="json",
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.patch(
+                f"/api/v1/admin/drivers/{other_driver.pk}/",
+                {"license_number": "RUXSAT"},
+                format="json",
+            ).status_code,
             404,
         )
         other_order = self.make_order(company=self.other_company, shop=self.other_shop)
