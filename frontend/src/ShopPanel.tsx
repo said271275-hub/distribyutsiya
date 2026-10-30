@@ -35,7 +35,9 @@ import {
   formatFinanceMoney,
 } from './dispatcherFinanceUtils'
 import { useAuth } from './useAuth'
+import { useTranslation } from './i18n/useTranslation'
 import { ru } from './i18n/ru'
+import { uz } from './i18n/uz'
 import './ShopPanel.css'
 import RecurringOrdersPage from './RecurringOrdersPage'
 
@@ -123,36 +125,6 @@ type Finance = {
   }>
 }
 
-const uz: Record<CopyKey, string> = {
-  home: 'Umumiy', catalog: 'Katalog', cart: 'Savat', orders: 'Buyurtmalar',
-  finance: 'Hisob-kitob', profile: 'Do‘kon profili', help: 'Aloqa', logout: 'Chiqish',
-  shop: 'Do‘kon', welcome: 'Do‘koningiz ish maydoni',
-  welcomeCopy: 'Mahsulot buyurtma qiling va yetkazish jarayonini kuzating.',
-  completeProfile: 'Do‘kon profilini to‘ldirish', firstOrder: 'Katalogni ochish',
-  search: 'Mahsulot qidirish', allCompanies: 'Barcha kompaniyalar', quantity: 'Miqdor',
-  addToCart: 'Savatga', emptyCatalog: 'Mahsulot topilmadi', emptyCart: 'Savat bo‘sh',
-  checkout: 'Buyurtma berish', deliveryDate: 'Yetkazish sanasi',
-  deliveryFrom: 'Qulay vaqt, dan', deliveryTo: 'Qulay vaqt, gacha', note: 'Izoh',
-  confirmOrder: 'Buyurtmani tasdiqlash', total: 'Jami',
-  cutoff: 'Ertangi buyurtmalar qabul qilinadi:', orderHistory: 'Buyurtmalar tarixi',
-  repeatLastOrder: 'Oxirgi buyurtmani takrorlash',
-  repeatLastLoaded: 'Oxirgi buyurtma savatga yuklandi.',
-  repeatLastNone: 'Oxirgi buyurtmada faol mahsulot qolmagan.',
-  repeatLastSkipped: '{count} ta nofaol mahsulot o‘tkazib yuborildi; qolganlari savatga qo‘shildi.',
-  repeat: 'Oxirgi buyurtmani takrorlash', cancel: 'Buyurtmani bekor qilish',
-  status: 'Holati', eta: 'Yetib borish vaqti', driver: 'Haydovchi telefoni',
-  balance: 'Joriy qarz', paymentHistory: 'To‘lovlar tarixi', save: 'Saqlash',
-  createProfile: 'Profilni yaratish', company: 'Kompaniya', ownerName: 'Egasi',
-  phonePrimary: 'Asosiy telefon', phoneSecondary: 'Qo‘shimcha telefon',
-  address: 'Manzil', district: 'Tuman', location: 'Joylashuv',
-  chooseOnMap: 'Xaritada nuqtani belgilang', myLocation: 'Joylashuvim',
-  emptyOrders: 'Hozircha buyurtma yo‘q', noPayments: 'Hozircha to‘lov yo‘q',
-  loading: 'Yuklanmoqda…', tryAgain: 'Qayta urinish',
-  gpsError: 'Joylashuvni aniqlab bo‘lmadi.', orderConfirmed: 'Buyurtma yuborildi',
-  profileSaved: 'Profil saqlandi', smsNotifications: 'Buyurtma SMS xabarnomalari',
-  smsNotificationsHint: 'O‘chirilganda buyurtma xabarlari kelmaydi. Kirish va tasdiqlash kodlari kelishda davom etadi.',
-}
-
 const profileSchema = z.object({
   company_id: z.string().optional(),
   name: z.string().trim().min(2, 'Do‘kon nomini kiriting.').max(200),
@@ -231,7 +203,7 @@ function ShopPanel() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [language, setLanguage] = useState<'uz' | 'ru'>(() => localStorage.getItem('shop-language') === 'ru' ? 'ru' : 'uz')
+  const { language, setLanguage } = useTranslation()
   const [cart, setCart] = useState<CartLine[]>([])
   const [cartCompanyId, setCartCompanyId] = useState<number | null>(null)
   const [notice, setNotice] = useState('')
@@ -253,10 +225,6 @@ function ShopPanel() {
 
   const activeContact = profile.data?.company_contacts.find((company) => company.phone)
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
-  const setLocale = (value: 'uz' | 'ru') => {
-    setLanguage(value)
-    localStorage.setItem('shop-language', value)
-  }
   const addToCart = (product: CatalogProduct) => {
     if (cartCompanyId !== null && cartCompanyId !== product.company_id) {
       setNotice('Bir savatda faqat bitta kompaniya mahsulotlari bo‘lishi mumkin. Avval savatni yakunlang yoki tozalang.')
@@ -338,7 +306,10 @@ function ShopPanel() {
           <div className="shop-breadcrumb">Tarqatuv <span>/</span> {location.pathname.startsWith('/shop/recurring') ? 'Takroriy buyurtmalar' : t(navItems.find((item) => location.pathname === item.to || (item.to !== '/shop' && location.pathname.startsWith(item.to)))?.key ?? 'home')}</div>
           <div className="shop-top-actions">
             {activeContact?.phone ? <a className="shop-help-link" href={`tel:${activeContact.phone}`}><Phone size={16} />{t('help')}</a> : null}
-            <label className="shop-language"><span className="sr-only">Til</span><select value={language} onChange={(event) => setLocale(event.target.value as 'uz' | 'ru')} aria-label="Til"><option value="uz">UZ</option><option value="ru">RU</option></select><ChevronDown size={13} /></label>
+            <label className="shop-language"><span className="sr-only">{t('language.select')}</span><select value={language} onChange={(event) => {
+              const value = event.target.value
+              if (value === 'uz' || value === 'ru') setLanguage(value)
+            }} aria-label={t('language.select')}><option value="uz">{t('language.uz')}</option><option value="ru">{t('language.ru')}</option></select><ChevronDown size={13} /></label>
             <ShopThemeToggle />
           </div>
         </header>

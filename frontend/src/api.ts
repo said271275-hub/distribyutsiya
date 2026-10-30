@@ -1,4 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { readLanguage } from './i18n/storage'
+import { translateServerError } from './i18n/serverErrors'
 
 export type UserRole = 'super_admin' | 'company_admin' | 'driver' | 'shop_owner'
 
@@ -118,15 +120,17 @@ api.interceptors.response.use(
 )
 
 export function apiErrorMessage(error: unknown, fallback = 'So‘rovni bajarib bo‘lmadi.') {
+  const language = readLanguage(localStorage)
+  const localize = (message: string) => translateServerError(message, language) ?? message
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as
       | { detail?: string; account?: string; phone?: string; password?: string; code?: string }
       | undefined
-    if (typeof data?.detail === 'string') return data.detail
+    if (typeof data?.detail === 'string') return localize(data.detail)
     for (const key of ['account', 'phone', 'password', 'code'] as const) {
       const value = data?.[key]
-      if (typeof value === 'string') return value
-      if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
+      if (typeof value === 'string') return localize(value)
+      if (Array.isArray(value) && typeof value[0] === 'string') return localize(value[0])
     }
   }
   return fallback
