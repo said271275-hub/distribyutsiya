@@ -1,9 +1,10 @@
 from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
+from tempfile import TemporaryDirectory
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient
@@ -397,23 +398,85 @@ class AdminApiTests(TestCase):
         self.assertEqual(missing_image.status_code, 400)
         self.assertIn("image", missing_image.data)
 
-        image_buffer = BytesIO()
-        Image.new("RGB", (1, 1), color="green").save(image_buffer, format="PNG")
-        image = SimpleUploadedFile(
-            "mahsulot.png", image_buffer.getvalue(), content_type="image/png"
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            image_buffer = BytesIO()
+            Image.new("RGB", (1, 1), color="green").save(image_buffer, format="PNG")
+            image = SimpleUploadedFile(
+                "mahsulot.png", image_buffer.getvalue(), content_type="image/png"
+            )
+            created = self.client.post(
+                "/api/v1/admin/products/",
+                {
+                    "name": "Yangi",
+                    "unit": Product.Unit.PIECE,
+                    "price": "25.00",
+                    "is_active": True,
+                    "image": image,
+                },
+                format="multipart",
+            )
+            self.assertEqual(created.status_code, 201, created.data)
+            product = Product.objects.get(pk=created.data["id"])
+            self.assertEqual(product.company, self.company)
+            self.assertNotEqual(product.image.name.rsplit("/", 1)[-1], "mahsulot.png")
+            self.assertTrue(product.image.name.startswith("catalog/products/"))
+
+            self.client.force_authenticate(self.owner)
+            catalog = self.client.get("/api/v1/catalog/")
+            self.assertEqual(catalog.status_code, 200, catalog.data)
+            product_data = next(
+                (row for row in catalog.data["results"] if row["id"] == product.pk),
+                None,
+            )
+            self.assertIsNotNone(product_data, catalog.data)
+            self.assertEqual(
+                product_data["image_url"],
+                f"http://testserver/media/{product.image.name}",
+            )
+
+    def test_product_image_rejects_unsupported_and_mismatched_files(self):
+        png_buffer = BytesIO()
+        Image.new("RGB", (1, 1), color="blue").save(png_buffer, format="PNG")
+        png_bytes = png_buffer.getvalue()
+        invalid_images = (
+            ("dastur.exe", b"not an image", "application/octet-stream"),
+            ("vector.svg", b"<svg xmlns='http://www.w3.org/2000/svg'/>", "image/svg+xml"),
+            ("soxta.jpg", png_bytes, "image/jpeg"),
         )
-        created = self.client.post(
+
+        for filename, content, content_type in invalid_images:
+            with self.subTest(filename=filename):
+                image = SimpleUploadedFile(filename, content, content_type=content_type)
+                response = self.client.post(
+                    "/api/v1/admin/products/",
+                    {
+                        "name": f"Noto‘g‘ri {filename}",
+                        "unit": Product.Unit.PIECE,
+                        "price": "25.00",
+                        "image": image,
+                    },
+                    format="multipart",
+                )
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertIn("image", response.data)
+
+        oversized = SimpleUploadedFile(
+            "katta.png",
+            b"x" * (5 * 1024 * 1024 + 1),
+            content_type="image/png",
+        )
+        response = self.client.post(
             "/api/v1/admin/products/",
             {
-                "name": "Yangi",
+                "name": "Hajmi katta",
                 "unit": Product.Unit.PIECE,
                 "price": "25.00",
-                "image": image,
+                "image": oversized,
             },
             format="multipart",
         )
-        self.assertEqual(created.status_code, 201, created.data)
-        self.assertEqual(Product.objects.get(pk=created.data["id"]).company, self.company)
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("image", response.data)
 
     def test_company_admin_cannot_access_other_company_resources(self):
         other_product = Product.objects.create(
@@ -447,6 +510,14 @@ class AdminApiTests(TestCase):
             self.client.get(f"/api/v1/admin/products/{other_product.pk}/").status_code,
             404,
         )
+        update_response = self.client.patch(
+            f"/api/v1/admin/products/{other_product.pk}/",
+            {"name": "Ruxsatsiz o‘zgarish"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, 404)
+        other_product.refresh_from_db()
+        self.assertEqual(other_product.name, "B mahsulot")
         for path in (
             f"/api/v1/admin/shop-prices/{other_price.pk}/",
             f"/api/v1/admin/shops/{self.other_shop.pk}/",

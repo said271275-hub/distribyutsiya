@@ -268,7 +268,7 @@ export default function DispatcherCatalogPage() {
               )}
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 required={!editingProduct}
                 onChange={selectProductImage}
               />

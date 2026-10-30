@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import datetime, time
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -8,6 +9,7 @@ from django.db.models import F, Prefetch, Q, Sum
 from django.forms.models import model_to_dict
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from PIL import Image, UnidentifiedImageError
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
@@ -259,14 +261,41 @@ class CompanyAdminViewSet(viewsets.GenericViewSet):
 
 
 class ProductAdminSerializer(serializers.ModelSerializer):
+    MAX_IMAGE_SIZE = 5 * 1024 * 1024
+    IMAGE_EXTENSIONS = {
+        "JPEG": {".jpg", ".jpeg"},
+        "PNG": {".png"},
+        "WEBP": {".webp"},
+    }
+
     def get_fields(self):
         fields = super().get_fields()
         fields["image"].required = self.instance is None
         return fields
 
     def validate_image(self, image):
-        if image.size > 5 * 1024 * 1024:
+        if image.size > self.MAX_IMAGE_SIZE:
             raise serializers.ValidationError("Rasm hajmi 5 MB dan oshmasin.")
+        extension = image.name.rsplit(".", 1)[-1].lower() if "." in image.name else ""
+        extension = f".{extension}" if extension else ""
+        try:
+            with Image.open(image) as uploaded_image:
+                image_format = uploaded_image.format
+                uploaded_image.verify()
+        except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as error:
+            raise serializers.ValidationError(
+                "Faqat haqiqiy JPG, PNG yoki WebP rasmini yuklang."
+            ) from error
+        finally:
+            image.seek(0)
+
+        allowed_extensions = self.IMAGE_EXTENSIONS.get(image_format)
+        if allowed_extensions is None or extension not in allowed_extensions:
+            raise serializers.ValidationError(
+                "Faqat haqiqiy JPG, PNG yoki WebP rasmini mos fayl kengaytmasi bilan yuklang."
+            )
+
+        image.name = f"{uuid.uuid4().hex}{extension}"
         return image
 
     class Meta:
