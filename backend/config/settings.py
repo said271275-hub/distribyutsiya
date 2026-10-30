@@ -25,7 +25,10 @@ if not SECRET_KEY:
     raise ImproperlyConfigured("Set DJANGO_SECRET_KEY in the environment.")
 
 DEBUG = env_bool("DJANGO_DEBUG", False)
+DJANGO_ENV = os.environ.get("DJANGO_ENV", "development").strip().lower()
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
+if DJANGO_ENV == "production" and DEBUG:
+    raise ImproperlyConfigured("DJANGO_ENV=production bo‘lganda DJANGO_DEBUG=False bo‘lishi kerak.")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -109,7 +112,10 @@ TIME_ZONE = "Asia/Tashkent"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = Path(os.environ.get("DJANGO_STATIC_ROOT", BASE_DIR / "staticfiles"))
+MEDIA_URL = "/media/"
+MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = env_list("DJANGO_CORS_ALLOWED_ORIGINS")
@@ -144,6 +150,7 @@ AUTH_COOKIE_NAME = "distribyutsiya_refresh"
 AUTH_COOKIE_PATH = "/api/auth/"
 AUTH_COOKIE_HTTPONLY = True
 AUTH_COOKIE_MAX_AGE = int(SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
+SESSION_COOKIE_HTTPONLY = True
 AUTH_LOGIN_MAX_FAILURES = 5
 AUTH_LOGIN_BLOCK_MINUTES = 15
 AUTH_OTP_TTL_MINUTES = 5
@@ -173,6 +180,34 @@ if not DEBUG:
     if not ESKIZ_EMAIL or not ESKIZ_PASSWORD or not ESKIZ_FROM:
         raise ImproperlyConfigured(
             "Production muhitida ESKIZ_EMAIL, ESKIZ_PASSWORD va ESKIZ_FROM sozlanishi kerak."
+        )
+    if len(SECRET_KEY) < 50 or SECRET_KEY.lower().startswith(("change-me", "replace-me")):
+        raise ImproperlyConfigured(
+            "Production muhitida kamida 50 belgili yangi DJANGO_SECRET_KEY kerak."
+        )
+    if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
+        raise ImproperlyConfigured(
+            "Production muhitida DJANGO_ALLOWED_HOSTS aniq domenlar bilan sozlanishi kerak."
+        )
+    if not CSRF_TRUSTED_ORIGINS:
+        raise ImproperlyConfigured(
+            "Production muhitida DJANGO_CSRF_TRUSTED_ORIGINS HTTPS manzillari bilan sozlanishi kerak."
+        )
+    if not all(origin.startswith("https://") for origin in CSRF_TRUSTED_ORIGINS):
+        raise ImproperlyConfigured(
+            "Production muhitidagi CSRF ishonchli manzillari HTTPS bo‘lishi kerak."
+        )
+    if not all(origin.startswith("https://") for origin in CORS_ALLOWED_ORIGINS):
+        raise ImproperlyConfigured(
+            "Production muhitidagi CORS manzillari HTTPS bo‘lishi kerak."
+        )
+    if not os.environ.get("POSTGRES_DB") or not os.environ.get("POSTGRES_USER"):
+        raise ImproperlyConfigured(
+            "Production muhitida POSTGRES_DB va POSTGRES_USER aniq ko‘rsatilishi kerak."
+        )
+    if not os.environ.get("POSTGRES_PASSWORD"):
+        raise ImproperlyConfigured(
+            "Production muhitida POSTGRES_PASSWORD bo‘sh bo‘lishi mumkin emas."
         )
 
 ROUTING_EXTERNAL_ENABLED = env_bool("ROUTING_EXTERNAL_ENABLED", DEBUG)
@@ -212,10 +247,56 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
 }
 
-SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT")
-SESSION_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES")
-CSRF_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES")
-SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "0"))
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES", not DEBUG)
+CSRF_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES", not DEBUG)
+SECURE_HSTS_SECONDS = int(
+    os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000")
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS")
+SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD")
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+if not DEBUG:
+    if not SECURE_SSL_REDIRECT:
+        raise ImproperlyConfigured("Production muhitida HTTPS yo‘naltirishi yoqilgan bo‘lishi kerak.")
+    if not (AUTH_COOKIE_SECURE and SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE):
+        raise ImproperlyConfigured("Production muhitida barcha autentifikatsiya cookie’lari Secure bo‘lishi kerak.")
+    if AUTH_COOKIE_SAMESITE.lower() not in {"lax", "strict"}:
+        raise ImproperlyConfigured(
+            "Production muhitida AUTH_COOKIE_SAMESITE Lax yoki Strict bo‘lishi kerak."
+        )
+    if SECURE_HSTS_SECONDS < 31536000:
+        raise ImproperlyConfigured(
+            "Production muhitida HSTS kamida 31536000 soniya qilib sozlanishi kerak."
+        )
+    if DATABASES["default"]["HOST"].strip().lower() not in {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    }:
+        raise ImproperlyConfigured(
+            "Ushbu production sozlamasida PostgreSQL faqat mahalliy manzilda bo‘lishi kerak."
+        )
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": os.environ.get("DJANGO_LOG_LEVEL", "INFO"),
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": os.environ.get("DJANGO_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}

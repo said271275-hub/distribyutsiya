@@ -1,0 +1,10 @@
+[Unit]
+Description=Takroriy buyurtmalarni kunlik rejalashtirish
+
+[Timer]
+OnCalendar=*-*-* 01:15:00
+Persistent=true
+Unit=distribyutsiya-recurring.service
+
+[Install]
+WantedBy=timers.target

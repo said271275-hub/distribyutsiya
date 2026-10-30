@@ -1,0 +1,22 @@
+[Unit]
+Description=Distribyutsiya Django veb xizmati
+After=network.target postgresql.service
+
+[Service]
+Type=exec
+User=distribyutsiya
+Group=www-data
+WorkingDirectory=/srv/distribyutsiya/backend
+EnvironmentFile=/etc/distribyutsiya/production.env
+ExecStart=/srv/distribyutsiya/venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60 --error-logfile -
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/distribyutsiya/shared/media
+
+[Install]
+WantedBy=multi-user.target

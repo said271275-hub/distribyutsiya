@@ -1,0 +1,16 @@
+[Unit]
+Description=Distribyutsiya takroriy buyurtmalar qoralamalarini yaratish
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=distribyutsiya
+Group=www-data
+WorkingDirectory=/srv/distribyutsiya/backend
+EnvironmentFile=/etc/distribyutsiya/production.env
+ExecStart=/srv/distribyutsiya/venv/bin/python manage.py create_recurring_orders
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict

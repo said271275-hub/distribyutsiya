@@ -1,0 +1,17 @@
+[Unit]
+Description=Distribyutsiya PostgreSQL va media zaxirasi
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=distribyutsiya
+Group=www-data
+WorkingDirectory=/srv/distribyutsiya
+EnvironmentFile=/etc/distribyutsiya/production.env
+ExecStart=/bin/bash /srv/distribyutsiya/deploy/backup-postgres.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/distribyutsiya

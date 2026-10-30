@@ -33,8 +33,13 @@
   qoldiq ogohlantirishi hamda reys tasdiqlashdagi zaxira, yetkazilgan miqdor
   chiqimi, yetkazilmagan qismni va muammoli/bekor qilingan reysdagi zaxirani
   qaytarish qo‘shildi.
+- **6-bosqich, ishlab chiqarishga chiqarish — hujjat va namunalar tayyorlandi:**
+  ishlab chiqarish sozlama namunasi, Gunicorn/Nginx va `systemd` namunalari,
+  zaxiralash-tiklash tartibi hamda tekshiruv ro‘yxati qo‘shildi. Haqiqiy
+  serverda ishga tushirish, zaxirani tiklash va HTTPS tekshiruvi operator
+  tomonidan bajarilishi kerak.
 - **6-bosqichning qolgan imkoniyatlari — bajarilmagan:** yetkazish isboti va
-  ishlab chiqarishga chiqarish.
+  ishlab chiqarish serverida amaliy tekshiruv.
 
 ## Sinovlar va tekshirilmagan ishlar
 
@@ -47,6 +52,14 @@
   buyurtma va SMS sinovlarida PostgreSQL’ning `FOR UPDATE` so‘rovidagi mavjud
   tashqi ulanish cheklovidan kelib chiqdi. Ombor/reys maqsadli sinovlari to‘liq
   o‘tdi.
+- Ishlab chiqarish sozlamalari uchun alohida **7** sinov muvaffaqiyatli o‘tdi.
+  `manage.py check --deploy` xatolarsiz yakunlandi; 13 ogohlantirish bor.
+  To‘liq server sinovlari mahalliy PostgreSQL uchun parol sozlanmagani sabab
+  sinov bazasini yaratish bosqichidan o‘tmadi. Veb sinovlaridan **55** tasi
+  o‘tdi; `npm run build` muvaffaqiyatli, lekin yirik JavaScript bo‘lagi haqida
+  oldindan mavjud ogohlantirish chiqdi.
+- Ishlab chiqarish serveri, Nginx/`systemd` sozlamalari, haqiqiy zaxira va
+  tiklash sinovdan o‘tkazilmadi; server amallari operatorga qoldirildi.
 - Veb tekshiruv vositasi avvaldan mavjud to‘rtta ogohlantirishni ko‘rsatdi;
   yangi ombor sahifasi bo‘yicha ogohlantirish chiqmadi.
 - Oxirgi buyurtmani takrorlash, dispetcherning buyurtmani boshqarish, reysni tuzish va 4C-3 sahifalarining to‘liq foydalanuvchi oqimlari uchun veb sinovlari yetishmaydi.
@@ -56,6 +69,10 @@
   SMS navbatining doimiy qayta ishlashi uchun `process_sms_outbox --loop`
   buyrug‘i alohida ishchi sifatida ishlashi kerak. Docker orqali ishga tushirish
   tekshirilmagan.
+- Ishlab chiqarish serverini sozlash uchun `docs/DEPLOY.md` ni, ishga tushirishdan
+  oldingi tekshiruv uchun `docs/PRODUCTION_CHECKLIST.md` ni bajaring.
+  Serverga joylashtirish, HTTPS sertifikati, zaxira va tiklash ushbu mahalliy
+  tekshiruvda bajarilmagan.
 - Takroriy buyurtma qoralamalarini har kuni yaratish va muddati o‘tganlarini
   yangilash uchun `python manage.py create_recurring_orders` buyrug‘ini kuniga
   bir marta ishga tushiring. Buyruq o‘z-o‘zidan rejalashtirilmaydi; avtomatik

@@ -78,6 +78,115 @@ class AdminUzbekLabelsTests(SimpleTestCase):
         )
 
 
+class ProductionSettingsTests(SimpleTestCase):
+    def production_environment(self):
+        environment = os.environ.copy()
+        environment.update(
+            DJANGO_SECRET_KEY="test-only-secret-key-" + ("x" * 60),
+            DJANGO_ENV="production",
+            DJANGO_DEBUG="False",
+            DJANGO_ALLOWED_HOSTS="example.test",
+            DJANGO_CSRF_TRUSTED_ORIGINS="https://example.test",
+            DJANGO_CORS_ALLOWED_ORIGINS="",
+            DJANGO_SECURE_SSL_REDIRECT="True",
+            DJANGO_SECURE_COOKIES="True",
+            AUTH_COOKIE_SECURE="True",
+            DJANGO_SECURE_HSTS_SECONDS="31536000",
+            DEV_OTP_ENABLED="False",
+            DEV_STAFF_PASSWORD="",
+            OTP_PROVIDER="apps.accounts.sms.EskizOtpProvider",
+            ESKIZ_EMAIL="test@example.test",
+            ESKIZ_PASSWORD="test-only-password",
+            ESKIZ_FROM="TEST",
+            POSTGRES_DB="test_db",
+            POSTGRES_USER="test_user",
+            POSTGRES_PASSWORD="test-only-password",
+            POSTGRES_HOST="127.0.0.1",
+        )
+        return environment
+
+    def load_settings(self, environment):
+        return subprocess.run(
+            [sys.executable, "-c", "import config.settings"],
+            cwd=Path(__file__).resolve().parents[2],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_production_settings_load_with_secure_values(self):
+        environment = self.production_environment()
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from config.settings import (AUTH_COOKIE_HTTPONLY, AUTH_COOKIE_SECURE, "
+                "DEBUG, SECURE_SSL_REDIRECT, SESSION_COOKIE_HTTPONLY, SESSION_COOKIE_SECURE); "
+                "assert not DEBUG and SECURE_SSL_REDIRECT and AUTH_COOKIE_SECURE "
+                "and SESSION_COOKIE_SECURE and AUTH_COOKIE_HTTPONLY and SESSION_COOKIE_HTTPONLY",
+            ],
+            cwd=Path(__file__).resolve().parents[2],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_dev_otp_is_rejected_during_production_settings_load(self):
+        environment = self.production_environment()
+        environment["DEV_OTP_ENABLED"] = "True"
+        environment["DEV_OTP_CODE"] = DEV_TEST_OTP_CODE
+        result = self.load_settings(environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ImproperlyConfigured", result.stderr)
+        self.assertIn("DEV_OTP_ENABLED", result.stderr)
+
+    def test_dev_staff_password_is_rejected_in_production(self):
+        environment = self.production_environment()
+        environment["DEV_STAFF_PASSWORD"] = "temporary-test-password"
+        result = self.load_settings(environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DEV_STAFF_PASSWORD", result.stderr)
+
+    def test_production_requires_eskiz_configuration(self):
+        environment = self.production_environment()
+        for key in ("ESKIZ_EMAIL", "ESKIZ_PASSWORD", "ESKIZ_FROM"):
+            environment.pop(key, None)
+        result = self.load_settings(environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ESKIZ_EMAIL", result.stderr)
+
+    def test_production_settings_reject_insecure_transport(self):
+        environment = self.production_environment()
+        environment["DJANGO_SECURE_SSL_REDIRECT"] = "False"
+        result = self.load_settings(environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("HTTPS yo‘naltirishi", result.stderr)
+
+    def test_production_settings_reject_remote_database_host(self):
+        environment = self.production_environment()
+        environment["POSTGRES_HOST"] = "database.example.test"
+        result = self.load_settings(environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("faqat mahalliy manzilda", result.stderr)
+
+    def test_production_environment_rejects_debug_mode(self):
+        environment = self.production_environment()
+        environment["DJANGO_DEBUG"] = "True"
+        result = self.load_settings(environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DJANGO_DEBUG=False", result.stderr)
+
+
 class OrderSummarySerializer(serializers.Serializer):
     id = serializers.IntegerField()
     company_id = serializers.IntegerField()
@@ -478,68 +587,6 @@ class AuthFlowTests(TestCase):
         self.assertIn("1212", text)
         self.assertNotIn("+998905551212", text)
         self.assertNotIn(DEV_TEST_OTP_CODE, text)
-
-    def test_dev_otp_is_rejected_during_production_settings_load(self):
-        environment = os.environ.copy()
-        environment.update(
-            DJANGO_SECRET_KEY="test-only-secret-key-long-enough-for-hmac",
-            DJANGO_DEBUG="False",
-            DEV_OTP_ENABLED="True",
-            DEV_OTP_CODE=DEV_TEST_OTP_CODE,
-        )
-        result = subprocess.run(
-            [sys.executable, "-c", "import config.settings"],
-            cwd=Path(__file__).resolve().parents[2],
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ImproperlyConfigured", result.stderr)
-        self.assertIn("DEV_OTP_ENABLED", result.stderr)
-
-    def test_production_requires_eskiz_configuration(self):
-        environment = os.environ.copy()
-        for key in ("ESKIZ_EMAIL", "ESKIZ_PASSWORD", "ESKIZ_FROM", "DEV_STAFF_PASSWORD"):
-            environment.pop(key, None)
-        environment.update(
-            DJANGO_SECRET_KEY="test-only-secret-key-long-enough-for-hmac",
-            DJANGO_DEBUG="False",
-            DEV_OTP_ENABLED="False",
-            OTP_PROVIDER="apps.accounts.sms.EskizOtpProvider",
-        )
-        result = subprocess.run(
-            [sys.executable, "-c", "import config.settings"],
-            cwd=Path(__file__).resolve().parents[2],
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ESKIZ_EMAIL", result.stderr)
-
-    def test_dev_staff_password_is_rejected_without_local_otp_flags(self):
-        environment = os.environ.copy()
-        environment.update(
-            DJANGO_SECRET_KEY="test-only-secret-key-long-enough-for-hmac",
-            DJANGO_DEBUG="False",
-            DEV_OTP_ENABLED="False",
-            DEV_STAFF_PASSWORD="temporary-test-password",
-        )
-        result = subprocess.run(
-            [sys.executable, "-c", "import config.settings"],
-            cwd=Path(__file__).resolve().parents[2],
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("DEV_STAFF_PASSWORD", result.stderr)
 
     def test_five_failed_logins_create_a_temporary_block(self):
         for index in range(5):

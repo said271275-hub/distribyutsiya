@@ -1,0 +1,22 @@
+[Unit]
+Description=Distribyutsiya SMS navbati ishchisi
+After=network.target postgresql.service distribyutsiya-web.service
+
+[Service]
+Type=exec
+User=distribyutsiya
+Group=www-data
+WorkingDirectory=/srv/distribyutsiya/backend
+EnvironmentFile=/etc/distribyutsiya/production.env
+ExecStart=/srv/distribyutsiya/venv/bin/python manage.py process_sms_outbox --loop
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/distribyutsiya/shared/media
+
+[Install]
+WantedBy=multi-user.target
