@@ -3,7 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.catalog.models import Product
 from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
@@ -138,3 +138,63 @@ def cancel_shop_order(*, order: Order, user, note: str = "") -> Order:
         order=order, status=order.status, actor=user, note=note[:500]
     )
     return order
+
+
+@transaction.atomic
+def checkout_shop_orders(*, user, data) -> list[Order]:
+    shop = Shop.objects.select_for_update().get(owner=user)
+    order_groups = data.get("orders", [])
+    if not order_groups:
+        raise ValidationError({"orders": "Kamida bitta kompaniyaga buyurtma berilishi kerak."})
+
+    company_ids = [group["company_id"] for group in order_groups]
+    if len(company_ids) != len(set(company_ids)):
+        raise ValidationError({"orders": "Bitta so‘rovda bir xil kompaniyani takrorlamang."})
+
+    created_orders = []
+    for group in order_groups:
+        cid = group["company_id"]
+        company = Company.objects.filter(pk=cid).first()
+        if not company:
+            raise ValidationError({"orders": f"ID={cid} bo‘yicha kompaniya topilmadi."})
+
+        # Kompaniya faolligi tekshiruvi
+        if not company.is_active or company.status != Company.Status.ACTIVE:
+            raise PermissionDenied(f"'{company.name}' kompaniyasi hozirda faol emas.")
+
+        # Obuna tekshiruvi (faqat status=active va is_active=True)
+        link = CompanyShopLink.objects.filter(
+            shop=shop,
+            company=company,
+            is_active=True,
+        ).first()
+        if not link or link.status != CompanyShopLink.Status.ACTIVE:
+            raise PermissionDenied(f"'{company.name}' kompaniyasiga faol obunangiz yo‘q.")
+
+        # Cutoff vaqti tekshiruvi
+        ensure_order_window(company, group["delivery_date"])
+
+        time_from = group.get("delivery_time_from") or group.get("time_from")
+        time_to = group.get("delivery_time_to") or group.get("time_to")
+        if time_from and time_to and time_from >= time_to:
+            raise ValidationError(
+                {"delivery_time_to": f"'{company.name}': Yetkazish oralig‘i boshlanishdan keyin tugashi kerak."}
+            )
+
+        priced_items = _validated_items(shop, company, group["items"])
+
+        order = Order.objects.create(
+            company=company,
+            shop=shop,
+            delivery_date=group["delivery_date"],
+            delivery_time_from=time_from,
+            delivery_time_to=time_to,
+            note=group.get("note", ""),
+        )
+        order.full_clean()
+        _replace_items(order, priced_items)
+        OrderStatusHistory.objects.create(order=order, status=order.status, actor=user)
+        queue_order_sms(order, "received")
+        created_orders.append(order)
+
+    return created_orders

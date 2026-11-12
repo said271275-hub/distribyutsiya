@@ -323,3 +323,22 @@ class SmsOutbox(models.Model):
                 name="sms_outbox_one_target",
             )
         ]
+
+
+class CheckoutIdempotency(models.Model):
+    shop = models.ForeignKey(
+        "companies.Shop", on_delete=models.CASCADE, related_name="checkout_idempotencies"
+    )
+    key = models.CharField(max_length=255)
+    response_data = models.JSONField()
+    status_code = models.PositiveSmallIntegerField(default=201)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("shop", "key"), name="uniq_shop_checkout_idempotency"
+            )
+        ]
+

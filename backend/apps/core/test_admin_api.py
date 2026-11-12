@@ -21,8 +21,8 @@ from apps.payments.models import BalanceEntry, Payment, ShopBalance
 class AdminApiTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.company = Company.objects.create(name="Kompaniya A")
-        cls.other_company = Company.objects.create(name="Kompaniya B")
+        cls.company = Company.objects.create(name="Kompaniya A", status=Company.Status.ACTIVE)
+        cls.other_company = Company.objects.create(name="Kompaniya B", status=Company.Status.ACTIVE)
         cls.admin = User.objects.create_user(
             phone="+998900004001",
             password="test-admin-password",
@@ -47,7 +47,9 @@ class AdminApiTests(TestCase):
             latitude=Decimal("40.840000"),
             longitude=Decimal("68.660000"),
         )
-        CompanyShopLink.objects.create(company=cls.company, shop=cls.shop)
+        CompanyShopLink.objects.create(
+            company=cls.company, shop=cls.shop, status=CompanyShopLink.Status.ACTIVE
+        )
         ShopBalance.objects.create(
             company=cls.company, shop=cls.shop, credit_limit=Decimal("5000.00")
         )

@@ -16,8 +16,12 @@ from apps.payments.models import Payment, ShopBalance
 class ShopApiTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.company = Company.objects.create(name="Sirdaryo", contact_phone="+998900000001")
-        cls.other_company = Company.objects.create(name="Boshqa kompaniya")
+        cls.company = Company.objects.create(
+            name="Sirdaryo", contact_phone="+998900000001", status=Company.Status.ACTIVE
+        )
+        cls.other_company = Company.objects.create(
+            name="Boshqa kompaniya", status=Company.Status.ACTIVE
+        )
         cls.owner = User.objects.create_user(
             phone="+998900000010", password="StrongPassword!234", role=User.Role.SHOP_OWNER
         )
@@ -31,7 +35,9 @@ class ShopApiTests(TestCase):
             latitude=Decimal("40.840000"),
             longitude=Decimal("68.660000"),
         )
-        CompanyShopLink.objects.create(company=cls.company, shop=cls.shop)
+        CompanyShopLink.objects.create(
+            company=cls.company, shop=cls.shop, status=CompanyShopLink.Status.ACTIVE
+        )
         cls.product = Product.objects.create(
             company=cls.company,
             name="Suv",
@@ -339,3 +345,183 @@ class ShopApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["balance"], "1250.00")
         self.assertEqual(len(response.data["payments"]), 1)
+
+    def test_checkout_multiple_companies_success(self):
+        second_company = Company.objects.create(
+            name="Ikkinchi Kompaniya", status=Company.Status.ACTIVE, contact_phone="+998900000002"
+        )
+        CompanyShopLink.objects.create(
+            company=second_company, shop=self.shop, status=CompanyShopLink.Status.ACTIVE
+        )
+        second_product = Product.objects.create(
+            company=second_company, name="Sharbat", price=Decimal("5000.00"), unit=Product.Unit.BOX
+        )
+        delivery_date = (timezone.localdate() + timedelta(days=2)).isoformat()
+        payload = {
+            "orders": [
+                {
+                    "company_id": self.company.pk,
+                    "delivery_date": delivery_date,
+                    "delivery_time_from": "09:00",
+                    "delivery_time_to": "12:00",
+                    "note": "1-buyurtma",
+                    "items": [{"product_id": self.product.pk, "quantity": "2.00"}],
+                },
+                {
+                    "company_id": second_company.pk,
+                    "delivery_date": delivery_date,
+                    "delivery_time_from": "14:00",
+                    "delivery_time_to": "18:00",
+                    "note": "2-buyurtma",
+                    "items": [{"product_id": second_product.pk, "quantity": "3.00"}],
+                },
+            ]
+        }
+        response = self.client.post("/api/v1/shop/checkout/", payload, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        orders = response.data["orders"]
+        self.assertEqual(len(orders), 2)
+        # Check order 1 (discounted price: 720 * 2 = 1440)
+        self.assertEqual(orders[0]["company_id"], self.company.pk)
+        self.assertEqual(orders[0]["company_name"], "Sirdaryo")
+        self.assertEqual(orders[0]["total_price"], "1440.00")
+        self.assertEqual(orders[0]["status"], "new")
+        # Check order 2 (5000 * 3 = 15000)
+        self.assertEqual(orders[1]["company_id"], second_company.pk)
+        self.assertEqual(orders[1]["company_name"], "Ikkinchi Kompaniya")
+        self.assertEqual(orders[1]["total_price"], "15000.00")
+        self.assertEqual(Order.objects.filter(shop=self.shop).count(), 2)
+
+    def test_checkout_atomic_rollback_on_partial_failure(self):
+        delivery_date = (timezone.localdate() + timedelta(days=2)).isoformat()
+        payload = {
+            "orders": [
+                {
+                    "company_id": self.company.pk,
+                    "delivery_date": delivery_date,
+                    "items": [{"product_id": self.product.pk, "quantity": "1.00"}],
+                },
+                {
+                    "company_id": self.other_company.pk,  # Shop is not subscribed to other_company
+                    "delivery_date": delivery_date,
+                    "items": [{"product_id": self.other_product.pk, "quantity": "1.00"}],
+                },
+            ]
+        }
+        response = self.client.post("/api/v1/shop/checkout/", payload, format="json")
+        self.assertEqual(response.status_code, 403)
+        # Atomic rollback: no order should be created for self.company either
+        self.assertEqual(Order.objects.filter(shop=self.shop).count(), 0)
+
+    def test_checkout_rejects_unsubscribed_company(self):
+        delivery_date = (timezone.localdate() + timedelta(days=2)).isoformat()
+        payload = {
+            "orders": [
+                {
+                    "company_id": self.other_company.pk,
+                    "delivery_date": delivery_date,
+                    "items": [{"product_id": self.other_product.pk, "quantity": "1.00"}],
+                }
+            ]
+        }
+        response = self.client.post("/api/v1/shop/checkout/", payload, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_checkout_rejects_cross_company_product(self):
+        delivery_date = (timezone.localdate() + timedelta(days=2)).isoformat()
+        payload = {
+            "orders": [
+                {
+                    "company_id": self.company.pk,
+                    "delivery_date": delivery_date,
+                    "items": [{"product_id": self.other_product.pk, "quantity": "1.00"}],
+                }
+            ]
+        }
+        response = self.client.post("/api/v1/shop/checkout/", payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("items", response.data)
+
+    def test_checkout_rejects_pending_or_suspended_company(self):
+        suspended_company = Company.objects.create(
+            name="To'xtatilgan Kompaniya", status=Company.Status.SUSPENDED
+        )
+        CompanyShopLink.objects.create(
+            company=suspended_company, shop=self.shop, status=CompanyShopLink.Status.ACTIVE
+        )
+        delivery_date = (timezone.localdate() + timedelta(days=2)).isoformat()
+        payload = {
+            "orders": [
+                {
+                    "company_id": suspended_company.pk,
+                    "delivery_date": delivery_date,
+                    "items": [{"product_id": self.product.pk, "quantity": "1.00"}],
+                }
+            ]
+        }
+        response = self.client.post("/api/v1/shop/checkout/", payload, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_checkout_idempotency_prevents_duplicate_orders(self):
+        delivery_date = (timezone.localdate() + timedelta(days=2)).isoformat()
+        payload = {
+            "orders": [
+                {
+                    "company_id": self.company.pk,
+                    "delivery_date": delivery_date,
+                    "items": [{"product_id": self.product.pk, "quantity": "2.00"}],
+                }
+            ]
+        }
+        headers = {"HTTP_IDEMPOTENCY_KEY": "test-key-uuid-999"}
+        resp1 = self.client.post("/api/v1/shop/checkout/", payload, format="json", **headers)
+        self.assertEqual(resp1.status_code, 201)
+        self.assertEqual(Order.objects.filter(shop=self.shop).count(), 1)
+        created_order_id = resp1.data["orders"][0]["id"]
+
+        # Resend exactly the same request with identical Idempotency-Key
+        resp2 = self.client.post("/api/v1/shop/checkout/", payload, format="json", **headers)
+        self.assertEqual(resp2.status_code, 201)
+        self.assertEqual(resp2.data["orders"][0]["id"], created_order_id)
+        # Order count MUST NOT increase
+        self.assertEqual(Order.objects.filter(shop=self.shop).count(), 1)
+
+    def test_orders_list_supports_company_filter(self):
+        second_company = Company.objects.create(
+            name="Filter Kompaniya", status=Company.Status.ACTIVE
+        )
+        CompanyShopLink.objects.create(
+            company=second_company, shop=self.shop, status=CompanyShopLink.Status.ACTIVE
+        )
+        second_product = Product.objects.create(
+            company=second_company, name="Mevali sharbat", price=Decimal("4000.00"), unit=Product.Unit.BOX
+        )
+        delivery_date = (timezone.localdate() + timedelta(days=2)).isoformat()
+        payload = {
+            "orders": [
+                {
+                    "company_id": self.company.pk,
+                    "delivery_date": delivery_date,
+                    "items": [{"product_id": self.product.pk, "quantity": "1.00"}],
+                },
+                {
+                    "company_id": second_company.pk,
+                    "delivery_date": delivery_date,
+                    "items": [{"product_id": second_product.pk, "quantity": "1.00"}],
+                },
+            ]
+        }
+        checkout_res = self.client.post("/api/v1/shop/checkout/", payload, format="json")
+        self.assertEqual(checkout_res.status_code, 201)
+
+        # Filter by self.company
+        res = self.client.get(f"/api/v1/orders/?company={self.company.pk}")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data["results"]), 1)
+        self.assertEqual(res.data["results"][0]["company_name"], "Sirdaryo")
+
+        # Filter by second_company
+        res2 = self.client.get(f"/api/v1/orders/?company={second_company.pk}")
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(len(res2.data["results"]), 1)
+        self.assertEqual(res2.data["results"][0]["company_name"], "Filter Kompaniya")

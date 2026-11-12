@@ -18,8 +18,18 @@ from apps.catalog.shop_api import ShopCatalogProductSerializer
 from apps.companies.models import CompanyShopLink, Shop, ShopPrice
 from apps.core.permissions import ShopOwnerPermission
 from apps.logistics.models import Trip, TripStopOrder
-from apps.orders.models import Order, OrderItem, OrderStatusHistory
-from apps.orders.shop_services import cancel_shop_order, create_shop_order, update_shop_order
+from apps.orders.models import (
+    CheckoutIdempotency,
+    Order,
+    OrderItem,
+    OrderStatusHistory,
+)
+from apps.orders.shop_services import (
+    cancel_shop_order,
+    checkout_shop_orders,
+    create_shop_order,
+    update_shop_order,
+)
 
 
 class ShopOrderPagination(PageNumberPagination):
@@ -73,6 +83,41 @@ class ShopOrderRepeatCartLineSerializer(serializers.Serializer):
 class ShopOrderRepeatCartSerializer(serializers.Serializer):
     items = ShopOrderRepeatCartLineSerializer(many=True)
     omitted_count = serializers.IntegerField()
+
+
+class CheckoutOrderItemInputSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal("0.01")
+    )
+
+
+class CheckoutOrderGroupInputSerializer(serializers.Serializer):
+    company_id = serializers.IntegerField(min_value=1)
+    delivery_date = serializers.DateField()
+    delivery_time_from = serializers.TimeField(required=False, allow_null=True)
+    delivery_time_to = serializers.TimeField(required=False, allow_null=True)
+    time_from = serializers.TimeField(required=False, allow_null=True)
+    time_to = serializers.TimeField(required=False, allow_null=True)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=5000, default="")
+    items = CheckoutOrderItemInputSerializer(many=True, min_length=1)
+
+    def validate(self, attrs):
+        time_from = attrs.get("delivery_time_from") or attrs.get("time_from")
+        time_to = attrs.get("delivery_time_to") or attrs.get("time_to")
+        if time_from and time_to and time_from >= time_to:
+            raise serializers.ValidationError(
+                {"delivery_time_to": "Yetkazish oralig‘i boshlanishdan keyin tugashi kerak."}
+            )
+        product_ids = [item["product_id"] for item in attrs["items"]]
+        if len(product_ids) != len(set(product_ids)):
+            raise serializers.ValidationError({"items": "Bir mahsulotni takrorlamang."})
+        return attrs
+
+
+class ShopCheckoutInputSerializer(serializers.Serializer):
+    orders = CheckoutOrderGroupInputSerializer(many=True, min_length=1)
+
 
 
 class OrderLineSerializer(serializers.ModelSerializer):
@@ -223,6 +268,11 @@ class ShopOrderSerializer(serializers.ModelSerializer):
         return _order_issue_history(order, links, events)
 
 
+class ShopCheckoutResponseSerializer(serializers.Serializer):
+    orders = ShopOrderSerializer(many=True)
+
+
+
 class ShopOrderBaseView(APIView):
     permission_classes = (IsAuthenticated, ShopOwnerPermission)
     serializer_class = ShopOrderSerializer
@@ -283,6 +333,12 @@ class ShopOrderListCreateView(ShopOrderBaseView):
             if status_filter not in Order.Status.values:
                 raise ValidationError({"status": "Buyurtma holati noto‘g‘ri."})
             orders = orders.filter(status=status_filter)
+        company_filter = request.query_params.get("company")
+        if company_filter:
+            try:
+                orders = orders.filter(company_id=int(company_filter))
+            except (ValueError, TypeError) as err:
+                raise ValidationError({"company": "Kompaniya ID raqami noto‘g‘ri."}) from err
         paginator = ShopOrderPagination()
         page = paginator.paginate_queryset(orders, request, view=self)
         attach_shop_order_issues(page)
@@ -294,6 +350,45 @@ class ShopOrderListCreateView(ShopOrderBaseView):
         serializer.is_valid(raise_exception=True)
         order = create_shop_order(user=request.user, data=serializer.validated_data)
         return Response(ShopOrderSerializer(order).data, status=201)
+
+
+class ShopCheckoutView(ShopOrderBaseView):
+    @extend_schema(
+        request=ShopCheckoutInputSerializer,
+        responses={201: ShopCheckoutResponseSerializer},
+    )
+    def post(self, request):
+        shop = self.get_shop(request.user)
+        idempotency_key = (
+            request.headers.get("Idempotency-Key")
+            or request.headers.get("X-Idempotency-Key")
+            or request.META.get("HTTP_IDEMPOTENCY_KEY")
+        )
+        if idempotency_key:
+            idempotency_key = idempotency_key.strip()
+            existing = CheckoutIdempotency.objects.filter(shop=shop, key=idempotency_key).first()
+            if existing:
+                return Response(existing.response_data, status=existing.status_code)
+
+        serializer = ShopCheckoutInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        created_orders = checkout_shop_orders(
+            user=request.user,
+            data=serializer.validated_data,
+        )
+        response_data = {"orders": ShopOrderSerializer(created_orders, many=True).data}
+
+        if idempotency_key:
+            CheckoutIdempotency.objects.create(
+                shop=shop,
+                key=idempotency_key,
+                response_data=response_data,
+                status_code=201,
+            )
+
+        return Response(response_data, status=201)
+
 
 
 class ShopOrderDetailView(ShopOrderBaseView):

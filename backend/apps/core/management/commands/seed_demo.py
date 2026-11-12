@@ -20,6 +20,16 @@ class Command(BaseCommand):
             help="Sinov do‘konlari va xodimlarini ham yaratadi.",
         )
         parser.add_argument(
+            "--with-demo-companies",
+            action="store_true",
+            help="2 ta qo‘shimcha faol demo kompaniya va ularning mahsulotlarini yaratadi.",
+        )
+        parser.add_argument(
+            "--clean-demo-companies",
+            action="store_true",
+            help="Qo‘shimcha demo kompaniyalarni tozalaydi.",
+        )
+        parser.add_argument(
             "--archive-demo-products-only",
             action="store_true",
             help="Mavjud namuna mahsulotlarini arxivlaydi, boshqa namuna ma’lumotlarini yaratmaydi.",
@@ -27,6 +37,18 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        if options["clean_demo_companies"]:
+            demo_companies = Company.objects.filter(
+                name__in=["Oazis Ichimliklari", "Baraka Savdo"]
+            )
+            Product.objects.filter(company__in=demo_companies).delete()
+            CompanyShopLink.objects.filter(company__in=demo_companies).delete()
+            deleted_count, _ = demo_companies.delete()
+            self.stdout.write(
+                self.style.SUCCESS(f"{deleted_count} ta qo‘shimcha demo kompaniya yozuvi tozalandi.")
+            )
+            return
+
         if options["archive_demo_products_only"]:
             company = Company.objects.filter(name="Sirdaryo Distribyutsiya").first()
             archived_products = 0
@@ -44,14 +66,19 @@ class Command(BaseCommand):
             return
 
         with_demo_users = options["with_demo_users"]
+        with_demo_companies = options["with_demo_companies"]
         company, _ = Company.objects.get_or_create(
             name="Sirdaryo Distribyutsiya",
             defaults={
                 "brand_color": "#1E88E5",
                 "contact_phone": "+998900009900",
+                "status": Company.Status.ACTIVE,
                 "is_active": True,
             },
         )
+        if company.status != Company.Status.ACTIVE:
+            company.status = Company.Status.ACTIVE
+            company.save(update_fields=("status",))
         archived_products = Product.objects.filter(
             company=company,
             name__startswith="Demo mahsulot ",
@@ -84,7 +111,11 @@ class Command(BaseCommand):
                         "status": Shop.Status.ACTIVE,
                     },
                 )
-                CompanyShopLink.objects.get_or_create(company=company, shop=shop)
+                CompanyShopLink.objects.get_or_create(
+                    company=company,
+                    shop=shop,
+                    defaults={"status": CompanyShopLink.Status.ACTIVE, "is_active": True},
+                )
 
             demo_shops = 20
         for index in range(1, 3):
@@ -131,9 +162,66 @@ class Command(BaseCommand):
             demo_drivers = 2
             demo_dispatchers = 1
 
+        extra_companies_count = 0
+        if with_demo_companies:
+            oazis, _ = Company.objects.get_or_create(
+                name="Oazis Ichimliklari",
+                defaults={
+                    "brand_color": "#00897B",
+                    "contact_phone": "+998900009902",
+                    "status": Company.Status.ACTIVE,
+                    "is_active": True,
+                    "description": "Salqin ichimliklar va tabiiy sharbatlar",
+                },
+            )
+            Product.objects.get_or_create(
+                company=oazis,
+                name="Oazis Choy 1L",
+                defaults={"unit": Product.Unit.BOX, "price": Decimal("12000.00"), "is_active": True},
+            )
+            Product.objects.get_or_create(
+                company=oazis,
+                name="Oazis Sharbat 1.5L",
+                defaults={"unit": Product.Unit.BOX, "price": Decimal("16000.00"), "is_active": True},
+            )
+
+            baraka, _ = Company.objects.get_or_create(
+                name="Baraka Savdo",
+                defaults={
+                    "brand_color": "#E65100",
+                    "contact_phone": "+998900009903",
+                    "status": Company.Status.ACTIVE,
+                    "is_active": True,
+                    "description": "Shirinlik va qandolat mahsulotlari",
+                },
+            )
+            Product.objects.get_or_create(
+                company=baraka,
+                name="Baraka Shirinlik 1kg",
+                defaults={"unit": Product.Unit.BOX, "price": Decimal("35000.00"), "is_active": True},
+            )
+            Product.objects.get_or_create(
+                company=baraka,
+                name="Baraka Shokolad 200g",
+                defaults={"unit": Product.Unit.PIECE, "price": Decimal("18000.00"), "is_active": True},
+            )
+
+            for s in Shop.objects.all():
+                CompanyShopLink.objects.get_or_create(
+                    company=oazis,
+                    shop=s,
+                    defaults={"status": CompanyShopLink.Status.ACTIVE, "is_active": True},
+                )
+                CompanyShopLink.objects.get_or_create(
+                    company=baraka,
+                    shop=s,
+                    defaults={"status": CompanyShopLink.Status.ACTIVE, "is_active": True},
+                )
+            extra_companies_count = 2
+
         self.stdout.write(
             self.style.SUCCESS(
-                f"Seed tayyor: 1 kompaniya, {archived_products} demo mahsulot arxivlandi, "
+                f"Seed tayyor: {1 + extra_companies_count} kompaniya, {archived_products} demo mahsulot arxivlandi, "
                 f"{demo_shops} do‘kon, "
                 f"2 mashina, {demo_drivers} haydovchi va {demo_dispatchers} dispetcher."
             )

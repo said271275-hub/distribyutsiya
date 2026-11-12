@@ -36,6 +36,7 @@ from apps.companies.views import (
     MyShopCompaniesListView,
 )
 from apps.orders.shop_api import (
+    ShopCheckoutView,
     ShopOrderCancelView,
     ShopOrderDetailView,
     ShopOrderListCreateView,
@@ -91,6 +92,7 @@ urlpatterns = [
     path("shop/profile/", ShopProfileView.as_view(), name="shop-profile"),
     path("shop/companies/", ShopCompanyListView.as_view(), name="shop-companies"),
     path("catalog/", ShopCatalogView.as_view(), name="shop-catalog"),
+    path("shop/checkout/", ShopCheckoutView.as_view(), name="shop-checkout"),
     path("orders/", ShopOrderListCreateView.as_view(), name="shop-orders"),
     path("orders/repeat-cart/", ShopOrderRepeatCartView.as_view(), name="shop-orders-repeat-cart"),
     path("orders/<int:pk>/", ShopOrderDetailView.as_view(), name="shop-order-detail"),

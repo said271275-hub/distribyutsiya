@@ -170,3 +170,26 @@ class DemoSeedCommandTests(TestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertFalse(response.data["user"]["must_change_password"])
+
+    def test_seed_demo_companies_creates_and_cleans_companies(self):
+        output = StringIO()
+        call_command("seed_demo", "--with-demo-companies", stdout=output)
+        self.assertTrue(Company.objects.filter(name="Oazis Ichimliklari", status=Company.Status.ACTIVE).exists())
+        self.assertTrue(Company.objects.filter(name="Baraka Savdo", status=Company.Status.ACTIVE).exists())
+        self.assertTrue(Product.objects.filter(company__name="Oazis Ichimliklari").exists())
+        self.assertTrue(Product.objects.filter(company__name="Baraka Savdo").exists())
+        self.assertIn("3 kompaniya", output.getvalue())
+
+        # Test reset_demo_companies command
+        clean_output = StringIO()
+        call_command("reset_demo_companies", stdout=clean_output)
+        self.assertFalse(Company.objects.filter(name="Oazis Ichimliklari").exists())
+        self.assertFalse(Company.objects.filter(name="Baraka Savdo").exists())
+        self.assertIn("tozalandi", clean_output.getvalue())
+
+        # Test --clean-demo-companies option in seed_demo
+        call_command("seed_demo", "--with-demo-companies", stdout=StringIO())
+        self.assertTrue(Company.objects.filter(name="Oazis Ichimliklari").exists())
+        call_command("seed_demo", "--clean-demo-companies", stdout=StringIO())
+        self.assertFalse(Company.objects.filter(name="Oazis Ichimliklari").exists())
+

@@ -12,7 +12,7 @@ from drf_spectacular.utils import extend_schema_field
 
 from apps.accounts.models import User
 from apps.catalog.models import Product
-from apps.companies.models import CompanyShopLink, Shop, ShopPrice
+from apps.companies.models import Company, CompanyShopLink, Shop, ShopPrice
 from apps.core.permissions import ShopOwnerPermission
 
 
@@ -75,7 +75,11 @@ class ShopCatalogView(generics.ListAPIView):
     def get_queryset(self):
         shop = get_object_or_404(Shop, owner=self.request.user)
         links = CompanyShopLink.objects.filter(
-            shop=shop, is_active=True, company__is_active=True
+            shop=shop,
+            status=CompanyShopLink.Status.ACTIVE,
+            is_active=True,
+            company__status=Company.Status.ACTIVE,
+            company__is_active=True,
         )
         company_ids = links.values_list("company_id", flat=True)
         company_filter = self.request.query_params.get("company")
