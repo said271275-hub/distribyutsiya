@@ -16,6 +16,8 @@ import './App.css'
 const ShopPanel = lazy(() => import('./ShopPanel'))
 const DispatcherPanel = lazy(() => import('./DispatcherPanel'))
 const DriverPanel = lazy(() => import('./DriverPanel'))
+const LandingChoicePage = lazy(() => import('./LandingChoicePage'))
+const CompanyRegisterPage = lazy(() => import('./CompanyRegisterPage'))
 
 type Translate = (key: TranslationKey) => string
 
@@ -390,7 +392,15 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
           </button>
         )}
         {staff ? (
-          <p>{t('auth.needStaff')} <span>{t('auth.contactAdmin')}</span></p>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <p>
+              Yangi kompaniya ochmoqchimisiz?{' '}
+              <Link to="/company/register" style={{ fontWeight: 600 }}>
+                Kompaniyani ro‘yxatdan o‘tkazish <span>↗</span>
+              </Link>
+            </p>
+            <p>{t('auth.needStaff')} <span>{t('auth.contactAdmin')}</span></p>
+          </div>
         ) : !restoreMode ? (
           <p>{t('auth.noAccount')} <Link to="/register">{t('auth.registerLink')} <span>↗</span></Link></p>
         ) : null}
@@ -1121,10 +1131,11 @@ function App() {
   const { t } = useTranslation()
   return (
     <Routes>
-      <Route path="/" element={<IndexRedirect />} />
+      <Route path="/" element={<Suspense fallback={<main className="full-loader">{t('common.loading')}</main>}><LandingChoicePage /></Suspense>} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/staff/login" element={<LoginPage staff />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/company/register" element={<Suspense fallback={<main className="full-loader">{t('common.loading')}</main>}><CompanyRegisterPage /></Suspense>} />
       <Route path="/password/reset" element={<PasswordResetPage />} />
       <Route path="/password/change" element={<ProtectedRoute><PasswordChangePage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

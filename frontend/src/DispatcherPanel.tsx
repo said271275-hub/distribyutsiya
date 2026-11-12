@@ -1,12 +1,14 @@
 import {
   BarChart3,
   Ban,
+  Building2,
   CalendarDays,
   Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Clock,
   Clock3,
   FileText,
   LogOut,
@@ -14,8 +16,10 @@ import {
   Package,
   RotateCw,
   Search,
+  ShieldAlert,
   Sun,
   Truck,
+  UserCheck,
   X,
   Route as RouteIcon,
   Boxes,
@@ -33,6 +37,7 @@ import { lazy, Suspense } from 'react'
 import axios from 'axios'
 import api, { apiErrorMessage } from './api'
 import { useAuth } from './useAuth'
+import type { CompanyMe } from './CompanyProfilePage'
 import {
   buildOrderQueryParams,
   canTransitionOrder,
@@ -57,6 +62,8 @@ const DispatcherStaffPage = lazy(() => import('./DispatcherStaffPage'))
 const DispatcherFinancePage = lazy(() => import('./DispatcherFinancePage'))
 const DispatcherReportsPage = lazy(() => import('./DispatcherReportsPage'))
 const InventoryPage = lazy(() => import('./InventoryPage'))
+const CompanySubscriptionsPage = lazy(() => import('./CompanySubscriptionsPage'))
+const CompanyProfilePage = lazy(() => import('./CompanyProfilePage'))
 
 type DashboardData = {
   date: string
@@ -66,6 +73,7 @@ type DashboardData = {
   pending: number
   overdue_stops: number
   trips_by_status: Record<string, number>
+  pending_subscriptions?: number
 }
 
 type AdminOrder = {
@@ -168,6 +176,18 @@ function DispatcherPanel() {
     }
   }
 
+  const companyQuery = useQuery({
+    queryKey: ['company-me'],
+    queryFn: async () => (await api.get<CompanyMe>('/v1/company/me/')).data,
+    staleTime: 30000,
+  })
+
+  const dashboardQuery = useQuery({
+    queryKey: ['dispatcher-dashboard'],
+    queryFn: async () => (await api.get<DashboardData>('/v1/admin/dashboard/')).data,
+    staleTime: 30000,
+  })
+
   const pageTitle = location.pathname.startsWith('/company/orders')
     ? 'Buyurtmalar'
     : location.pathname.startsWith('/company/trips')
@@ -180,6 +200,10 @@ function DispatcherPanel() {
             ? 'Ombor'
           : location.pathname.startsWith('/company/shops')
             ? 'Do‘konlar'
+            : location.pathname.startsWith('/company/subscriptions')
+              ? 'Obuna so‘rovlari'
+              : location.pathname.startsWith('/company/profile')
+                ? 'Kompaniya profili'
             : location.pathname.startsWith('/company/fleet')
               ? 'Mashinalar va haydovchilar'
               : location.pathname.startsWith('/company/staff')
@@ -220,6 +244,16 @@ function DispatcherPanel() {
           <NavLink to="/company/shops" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <MapPin size={18} strokeWidth={1.8} /><span>Do‘konlar</span>
           </NavLink>
+          <NavLink to="/company/subscriptions" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <UserCheck size={18} strokeWidth={1.8} />
+            <span>Obuna so‘rovlari</span>
+            {Boolean(dashboardQuery.data?.pending_subscriptions) && (
+              <span className="dispatcher-nav-badge">{dashboardQuery.data?.pending_subscriptions}</span>
+            )}
+          </NavLink>
+          <NavLink to="/company/profile" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+            <Building2 size={18} strokeWidth={1.8} /><span>Kompaniya profili</span>
+          </NavLink>
           <NavLink to="/company/finance" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
             <Wallet size={18} strokeWidth={1.8} /><span>Qarz va to‘lov</span>
           </NavLink>
@@ -253,6 +287,30 @@ function DispatcherPanel() {
           </div>
         </header>
         <div className="dispatcher-content">
+          {companyQuery.data?.status === 'pending' && (
+            <div className="dispatcher-banner dispatcher-banner-amber" role="alert">
+              <Clock size={20} />
+              <div>
+                <strong>Kompaniyangiz tasdiqlash jarayonida (kutilmoqda).</strong>
+                <span>
+                  {' '}Siz mahsulot, ombor va narxlarni sozlashingiz mumkin, lekin do‘konlar hali sizni katalogda ko‘rmaydi va buyurtma bera olmaydi.
+                </span>
+              </div>
+            </div>
+          )}
+          {(companyQuery.data?.status === 'suspended' || companyQuery.data?.status === 'rejected') && (
+            <div className="dispatcher-banner dispatcher-banner-red" role="alert">
+              <ShieldAlert size={20} />
+              <div>
+                <strong>
+                  Kompaniyangiz faoliyati {companyQuery.data.status === 'suspended' ? 'vaqtincha to‘xtatilgan' : 'rad etilgan'}.
+                </strong>
+                {companyQuery.data.rejection_reason && <span> Sabab: {companyQuery.data.rejection_reason}.</span>}
+                <span> Qo‘shimcha ma’lumot uchun tizim administratori bilan bog‘laning.</span>
+              </div>
+            </div>
+          )}
+
           <Routes>
             <Route index element={<DashboardPage />} />
             <Route path="orders" element={<OrdersPage />} />
@@ -260,6 +318,8 @@ function DispatcherPanel() {
             <Route path="picking-list" element={<Suspense fallback={<LoadingState />}><PickingListPage /></Suspense>} />
             <Route path="catalog" element={<Suspense fallback={<LoadingState />}><DispatcherCatalogPage /></Suspense>} />
             <Route path="shops" element={<Suspense fallback={<LoadingState />}><DispatcherShopsPage /></Suspense>} />
+            <Route path="subscriptions" element={<Suspense fallback={<LoadingState />}><CompanySubscriptionsPage /></Suspense>} />
+            <Route path="profile" element={<Suspense fallback={<LoadingState />}><CompanyProfilePage /></Suspense>} />
             <Route path="finance" element={<Suspense fallback={<LoadingState />}><DispatcherFinancePage /></Suspense>} />
             <Route path="reports" element={<Suspense fallback={<LoadingState />}><DispatcherReportsPage /></Suspense>} />
             <Route path="inventory" element={<Suspense fallback={<LoadingState />}><InventoryPage /></Suspense>} />
