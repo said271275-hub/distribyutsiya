@@ -3,6 +3,7 @@ from datetime import time
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models import CompanyOwnedModel, TimestampedModel
 
@@ -105,10 +106,24 @@ class Shop(TimestampedModel):
 
 
 class CompanyShopLink(CompanyOwnedModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Kutilmoqda"
+        ACTIVE = "active", "Faol"
+        REJECTED = "rejected", "Rad etilgan"
+        BLOCKED = "blocked", "Bloklangan"
+
     shop = models.ForeignKey(Shop, on_delete=models.PROTECT, related_name="company_links")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
     is_active = models.BooleanField(default=True)
+    requested_at = models.DateTimeField(default=timezone.now)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="decided_subscriptions"
+    )
+    reject_reason = models.TextField(blank=True)
 
     class Meta:
+        ordering = ("-requested_at",)
         constraints = [
             models.UniqueConstraint(
                 fields=("company", "shop"), name="uniq_company_shop_link"

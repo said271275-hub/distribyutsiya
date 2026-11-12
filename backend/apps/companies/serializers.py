@@ -59,6 +59,119 @@ class CompanyRegistrationSerializer(serializers.Serializer):
         return val
 
 
+class DirectoryCompanySerializer(serializers.ModelSerializer):
+    subscription_status = serializers.SerializerMethodField()
+    subscription_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Company
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "logo",
+            "description",
+            "service_districts",
+            "contact_phone",
+            "brand_color",
+            "order_cutoff_time",
+            "subscription_status",
+            "subscription_id",
+        )
+
+    def get_subscription_status(self, company) -> str:
+        shop = self.context.get("shop")
+        if not shop:
+            return "none"
+        links_map = self.context.get("links_map")
+        if links_map is not None:
+            link = links_map.get(company.id)
+        else:
+            link = company.company_links.filter(shop=shop).first()
+        return link.status if link else "none"
+
+    def get_subscription_id(self, company) -> int | None:
+        shop = self.context.get("shop")
+        if not shop:
+            return None
+        links_map = self.context.get("links_map")
+        if links_map is not None:
+            link = links_map.get(company.id)
+        else:
+            link = company.company_links.filter(shop=shop).first()
+        return link.id if link else None
+
+
+class MyCompanySubscriptionSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    company_logo = serializers.ImageField(source="company.logo", read_only=True)
+    company_phone = serializers.CharField(source="company.contact_phone", read_only=True)
+    company_order_cutoff_time = serializers.TimeField(source="company.order_cutoff_time", read_only=True)
+
+    class Meta:
+        from apps.companies.models import CompanyShopLink
+        model = CompanyShopLink
+        fields = (
+            "id",
+            "company_id",
+            "company_name",
+            "company_logo",
+            "company_phone",
+            "company_order_cutoff_time",
+            "status",
+            "is_active",
+            "requested_at",
+            "decided_at",
+            "reject_reason",
+        )
+
+
+class CompanySubscriptionRequestSerializer(serializers.ModelSerializer):
+    shop_id = serializers.IntegerField(source="shop.id", read_only=True)
+    shop_name = serializers.CharField(source="shop.name", read_only=True)
+    district = serializers.CharField(source="shop.district", read_only=True)
+    phone_primary = serializers.SerializerMethodField()
+    phone_secondary = serializers.SerializerMethodField()
+    address = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from apps.companies.models import CompanyShopLink
+        model = CompanyShopLink
+        fields = (
+            "id",
+            "shop_id",
+            "shop_name",
+            "district",
+            "status",
+            "is_active",
+            "requested_at",
+            "decided_at",
+            "reject_reason",
+            "phone_primary",
+            "phone_secondary",
+            "address",
+            "owner_name",
+        )
+
+    def get_phone_primary(self, obj) -> str | None:
+        return obj.shop.phone_primary if obj.status == "active" else None
+
+    def get_phone_secondary(self, obj) -> str | None:
+        return obj.shop.phone_secondary if obj.status == "active" else None
+
+    def get_address(self, obj) -> str | None:
+        return obj.shop.address if obj.status == "active" else None
+
+    def get_owner_name(self, obj) -> str | None:
+        return obj.shop.owner_name if obj.status == "active" else None
+
+
+class SubscriptionRejectInputSerializer(serializers.Serializer):
+    reject_reason = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+
+
+
 class CompanyMeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
@@ -124,4 +237,117 @@ class CompanyMeUpdateSerializer(serializers.ModelSerializer):
         if not val.startswith("#") or len(val) not in (4, 7):
             raise serializers.ValidationError("Brend rangi #RGB yoki #RRGGBB formatida bo‘lishi kerak.")
         return val
+
+
+class DirectoryCompanySerializer(serializers.ModelSerializer):
+    subscription_status = serializers.SerializerMethodField()
+    subscription_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Company
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "logo",
+            "description",
+            "service_districts",
+            "contact_phone",
+            "brand_color",
+            "order_cutoff_time",
+            "subscription_status",
+            "subscription_id",
+        )
+
+    def get_subscription_status(self, company) -> str:
+        shop = self.context.get("shop")
+        if not shop:
+            return "none"
+        links_map = self.context.get("links_map")
+        if links_map is not None:
+            link = links_map.get(company.id)
+        else:
+            link = company.company_links.filter(shop=shop).first()
+        return link.status if link else "none"
+
+    def get_subscription_id(self, company) -> int | None:
+        shop = self.context.get("shop")
+        if not shop:
+            return None
+        links_map = self.context.get("links_map")
+        if links_map is not None:
+            link = links_map.get(company.id)
+        else:
+            link = company.company_links.filter(shop=shop).first()
+        return link.id if link else None
+
+
+class MyCompanySubscriptionSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    company_logo = serializers.ImageField(source="company.logo", read_only=True)
+    company_phone = serializers.CharField(source="company.contact_phone", read_only=True)
+    company_order_cutoff_time = serializers.TimeField(source="company.order_cutoff_time", read_only=True)
+
+    class Meta:
+        from apps.companies.models import CompanyShopLink
+        model = CompanyShopLink
+        fields = (
+            "id",
+            "company_id",
+            "company_name",
+            "company_logo",
+            "company_phone",
+            "company_order_cutoff_time",
+            "status",
+            "is_active",
+            "requested_at",
+            "decided_at",
+            "reject_reason",
+        )
+
+
+class CompanySubscriptionRequestSerializer(serializers.ModelSerializer):
+    shop_id = serializers.IntegerField(source="shop.id", read_only=True)
+    shop_name = serializers.CharField(source="shop.name", read_only=True)
+    district = serializers.CharField(source="shop.district", read_only=True)
+    phone_primary = serializers.SerializerMethodField()
+    phone_secondary = serializers.SerializerMethodField()
+    address = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from apps.companies.models import CompanyShopLink
+        model = CompanyShopLink
+        fields = (
+            "id",
+            "shop_id",
+            "shop_name",
+            "district",
+            "status",
+            "is_active",
+            "requested_at",
+            "decided_at",
+            "reject_reason",
+            "phone_primary",
+            "phone_secondary",
+            "address",
+            "owner_name",
+        )
+
+    def get_phone_primary(self, obj) -> str | None:
+        return obj.shop.phone_primary if obj.status == "active" else None
+
+    def get_phone_secondary(self, obj) -> str | None:
+        return obj.shop.phone_secondary if obj.status == "active" else None
+
+    def get_address(self, obj) -> str | None:
+        return obj.shop.address if obj.status == "active" else None
+
+    def get_owner_name(self, obj) -> str | None:
+        return obj.shop.owner_name if obj.status == "active" else None
+
+
+class SubscriptionRejectInputSerializer(serializers.Serializer):
+    reject_reason = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+
 

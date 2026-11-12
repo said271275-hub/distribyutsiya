@@ -449,6 +449,7 @@ class DashboardSerializer(serializers.Serializer):
     pending = serializers.IntegerField()
     overdue_stops = serializers.IntegerField()
     trips_by_status = serializers.DictField(child=serializers.IntegerField())
+    pending_subscriptions = serializers.IntegerField(default=0)
 
 
 def _trip_queryset(company, *, driver=None, driver_details=False):
@@ -1639,6 +1640,10 @@ class DashboardView(APIView):
             for row in Trip.objects.filter(company=company, date=today)
             .values("status").annotate(count=Count("id"))
         }
+        from apps.companies.models import CompanyShopLink
+        pending_subscriptions = CompanyShopLink.objects.filter(
+            company=company, status=CompanyShopLink.Status.PENDING
+        ).count()
         return Response(DashboardSerializer({
             "date": today,
             "orders_total": orders.count(),
@@ -1647,4 +1652,5 @@ class DashboardView(APIView):
             "pending": pending,
             "overdue_stops": overdue,
             "trips_by_status": trips_by_status,
+            "pending_subscriptions": pending_subscriptions,
         }).data)
