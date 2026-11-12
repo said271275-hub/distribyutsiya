@@ -26,6 +26,7 @@ from apps.logistics.trips_api import (
     TripStopOrdersView,
 )
 from apps.companies.shop_api import ShopCompanyListView, ShopProfileView
+from apps.companies.views import CompanyMeView, CompanyRegistrationView
 from apps.orders.shop_api import (
     ShopOrderCancelView,
     ShopOrderDetailView,
@@ -62,6 +63,8 @@ admin_router.register("trips", TripAdminViewSet, basename="admin-trips")
 
 
 urlpatterns = [
+    path("companies/register/", CompanyRegistrationView.as_view(), name="company-register"),
+    path("company/me/", CompanyMeView.as_view(), name="company-me"),
     path("admin/reports/", AdminReportsView.as_view(), name="admin-reports"),
     path("admin/", include(admin_router.urls)),
     path("shop/profile/", ShopProfileView.as_view(), name="shop-profile"),

@@ -8,7 +8,22 @@ from apps.core.models import CompanyOwnedModel, TimestampedModel
 
 
 class Company(TimestampedModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Kutilmoqda"
+        ACTIVE = "active", "Faol"
+        SUSPENDED = "suspended", "To‘xtatilgan"
+        REJECTED = "rejected", "Rad etilgan"
+
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    description = models.TextField(blank=True)
+    service_districts = models.JSONField(default=list, blank=True)
+    tax_id = models.CharField(max_length=30, blank=True)
+    auto_approve_subscriptions = models.BooleanField(default=False)
+    rejection_reason = models.TextField(blank=True)
     logo = models.ImageField(upload_to="companies/logos/", blank=True)
     brand_color = models.CharField(max_length=7, blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)
@@ -19,6 +34,24 @@ class Company(TimestampedModel):
 
     class Meta:
         ordering = ("name",)
+        constraints = [
+            models.UniqueConstraint(
+                models.functions.Lower("name"),
+                name="uniq_company_name_case_insensitive",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            base_slug = slugify(self.name) or "company"
+            slug = base_slug
+            counter = 1
+            while Company.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

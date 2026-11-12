@@ -26,6 +26,19 @@ class RolePermission(BasePermission):
 class CompanyAdminPermission(RolePermission):
     allowed_roles = (User.Role.SUPER_ADMIN, User.Role.COMPANY_ADMIN)
 
+    def has_permission(self, request, view):
+        has_perm = super().has_permission(request, view)
+        if not has_perm:
+            return False
+        user = request.user
+        if user.role == User.Role.COMPANY_ADMIN and user.company:
+            from apps.companies.models import Company
+            from rest_framework.exceptions import PermissionDenied
+            if user.company.status in (Company.Status.REJECTED, Company.Status.SUSPENDED):
+                reason = user.company.rejection_reason or "Kompaniya faoliyati to‘xtatilgan yoki arizasi rad etilgan."
+                raise PermissionDenied(f"Kompaniya holati: {user.company.get_status_display()}. Sabab: {reason}")
+        return True
+
 
 class InventoryAdminPermission(RolePermission):
     allowed_roles = (User.Role.COMPANY_ADMIN,)
