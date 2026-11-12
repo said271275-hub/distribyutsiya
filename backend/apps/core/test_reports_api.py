@@ -391,7 +391,7 @@ class AdminReportsApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(debit_total, Decimal("3500.00"))
-        self.assertEqual(response.data["summary"]["delivered_amount"], str(debit_total))
+        self.assertEqual(Decimal(response.data["summary"]["delivered_amount"]), debit_total)
 
     def test_reports_cannot_read_another_company(self):
         own_shop = ShopBalance.objects.create(

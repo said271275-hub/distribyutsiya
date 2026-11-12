@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -34,6 +35,10 @@ class RecurringItemInputSerializer(serializers.Serializer):
         min_value=Decimal("0.01"),
         max_value=MAX_ITEM_QUANTITY,
     )
+
+
+class RecurringActionEmptySerializer(serializers.Serializer):
+    pass
 
 
 class RecurringScheduleWriteSerializer(serializers.Serializer):
@@ -148,6 +153,8 @@ class ShopRecurringBaseView(APIView):
 
 
 class ShopRecurringOrdersView(ShopRecurringBaseView):
+    serializer_class = RecurringScheduleWriteSerializer
+
     def get(self, request):
         shop = self.get_shop(request.user)
         schedules = (
@@ -200,6 +207,8 @@ class ShopRecurringOrdersView(ShopRecurringBaseView):
 
 
 class ShopRecurringScheduleDetailView(ShopRecurringBaseView):
+    serializer_class = RecurringScheduleWriteSerializer
+
     def get_schedule(self, user, pk):
         return get_object_or_404(
             RecurringOrderSchedule.objects.select_related("company").prefetch_related(
@@ -223,6 +232,8 @@ class ShopRecurringScheduleDetailView(ShopRecurringBaseView):
 
 
 class ShopRecurringScheduleActionView(ShopRecurringBaseView):
+    serializer_class = RecurringActionEmptySerializer
+
     def post(self, request, pk, action):
         schedule = get_object_or_404(
             RecurringOrderSchedule.objects.select_related("company"),
@@ -245,6 +256,8 @@ class ShopRecurringScheduleActionView(ShopRecurringBaseView):
 
 
 class ShopRecurringDraftActionView(ShopRecurringBaseView):
+    serializer_class = RecurringActionEmptySerializer
+
     def get_draft(self, user, pk):
         return get_object_or_404(
             RecurringOrderDraft.objects.select_related(

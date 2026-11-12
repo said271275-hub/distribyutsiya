@@ -335,6 +335,8 @@ class AccountDeletionView(AuthenticatedView):
 
 
 class AccountDeletionOTPView(AuthenticatedView):
+    serializer_class = DetailResponseSerializer
+
     @extend_schema(responses={202: DetailResponseSerializer})
     def post(self, request):
         if request.user.role != User.Role.SHOP_OWNER:

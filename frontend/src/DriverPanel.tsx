@@ -112,7 +112,7 @@ export default function DriverPanel() {
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null)
   const [logoutError, setLogoutError] = useState('')
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
-  const [isInstalled, setIsInstalled] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [usingOfflineSnapshot, setUsingOfflineSnapshot] = useState(false)
   const [pendingActionCount, setPendingActionCount] = useState(0)
@@ -241,7 +241,6 @@ export default function DriverPanel() {
     const previousThemeColor = themeColor?.getAttribute('content')
     themeColor?.setAttribute('content', '#087f5b')
 
-    if (window.matchMedia('(display-mode: standalone)').matches) setIsInstalled(true)
     if ('serviceWorker' in navigator) {
       void navigator.serviceWorker.register('/sw.js', { scope: '/driver' }).catch(() => undefined)
     }

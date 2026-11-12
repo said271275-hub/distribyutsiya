@@ -1158,7 +1158,8 @@ class ShopBalanceOutputSerializer(serializers.ModelSerializer):
         rows = [entry for entry in rows if entry.company_id == balance.company_id][:50]
         return BalanceEntryOutputSerializer(rows, many=True).data
 
-    def get_last_payment_at(self, balance):
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_last_payment_at(self, balance) -> str | None:
         rows = getattr(balance.shop, "company_balance_entries", None)
         if rows is None:
             rows = BalanceEntry.objects.filter(
