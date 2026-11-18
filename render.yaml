@@ -34,7 +34,7 @@ services:
       - key: DJANGO_CORS_ALLOWED_ORIGINS
         value: https://distribyutsiya.vercel.app
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        value: https://distribyutsiya-backend.onrender.com
+        value: https://distribyutsiya-backend.onrender.com,https://distribyutsiya.vercel.app
       - key: OTP_PROVIDER
         value: apps.accounts.sms.EskizOtpProvider
       - key: ESKIZ_EMAIL

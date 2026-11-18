@@ -151,32 +151,30 @@ MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = env_list("DJANGO_CORS_ALLOWED_ORIGINS")
-if not CORS_ALLOWED_ORIGINS:
-    if DEBUG:
-        CORS_ALLOWED_ORIGINS = [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ]
-    else:
-        CORS_ALLOWED_ORIGINS = [
-            "https://distribyutsiya.vercel.app",
-        ]
+for origin in [
+    "https://distribyutsiya.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]:
+    if origin not in CORS_ALLOWED_ORIGINS:
+        if origin.startswith("https://") or DEBUG:
+            CORS_ALLOWED_ORIGINS.append(origin)
+
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.vercel\.app$",
 ]
 
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
-if not CSRF_TRUSTED_ORIGINS:
-    if DEBUG:
-        CSRF_TRUSTED_ORIGINS = [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ]
-    else:
-        CSRF_TRUSTED_ORIGINS = [
-            "https://distribyutsiya-backend.onrender.com",
-            "https://distribyutsiya.vercel.app",
-        ]
+for origin in [
+    "https://distribyutsiya-backend.onrender.com",
+    "https://distribyutsiya.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]:
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        if origin.startswith("https://") or DEBUG:
+            CSRF_TRUSTED_ORIGINS.append(origin)
+
 if render_hostname:
     render_origin = f"https://{render_hostname}"
     if render_origin not in CSRF_TRUSTED_ORIGINS:
@@ -305,8 +303,8 @@ if (
     )
 
 CORS_ALLOW_CREDENTIALS = True
-CSRF_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
+SESSION_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Distribyutsiya API",
