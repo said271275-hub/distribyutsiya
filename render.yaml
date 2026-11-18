@@ -9,7 +9,7 @@ services:
     name: distribyutsiya-backend
     runtime: python
     rootDir: backend
-    buildCommand: ./render-build.sh
+    buildCommand: bash ./render-build.sh
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     plan: free
     envVars:
