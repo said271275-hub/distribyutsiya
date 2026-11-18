@@ -1,0 +1,45 @@
+databases:
+  - name: distribyutsiya-db
+    databaseName: distribyutsiya
+    user: distribyutsiya
+    plan: free
+
+services:
+  - type: web
+    name: distribyutsiya-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: ./render-build.sh
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: distribyutsiya-db
+          property: connectionString
+      - key: DJANGO_ENV
+        value: production
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_COOKIE_SAMESITE
+        value: "None"
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false
+      - key: DJANGO_CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: OTP_PROVIDER
+        value: apps.accounts.sms.EskizOtpProvider
+      - key: ESKIZ_EMAIL
+        sync: false
+      - key: ESKIZ_PASSWORD
+        sync: false
+      - key: ESKIZ_FROM
+        value: "4546"

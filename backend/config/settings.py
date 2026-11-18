@@ -1,5 +1,6 @@
 import os
 import re
+import urllib.parse
 from datetime import time
 from datetime import timedelta
 from pathlib import Path
@@ -27,6 +28,10 @@ if not SECRET_KEY:
 DEBUG = env_bool("DJANGO_DEBUG", False)
 DJANGO_ENV = os.environ.get("DJANGO_ENV", "development").strip().lower()
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
+render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if render_hostname and render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_hostname)
+
 if DJANGO_ENV == "production" and DEBUG:
     raise ImproperlyConfigured("DJANGO_ENV=production bo‘lganda DJANGO_DEBUG=False bo‘lishi kerak.")
 
@@ -53,6 +58,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -84,17 +90,34 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 AUTH_USER_MODEL = "accounts.User"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DB", "distribyutsiya"),
-        "USER": os.environ.get("POSTGRES_USER", "distribyutsiya"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
-        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
-        "CONN_MAX_AGE": 60,
+database_url = os.environ.get("DATABASE_URL")
+if database_url:
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    parsed_db = urllib.parse.urlparse(database_url)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": parsed_db.path.lstrip("/"),
+            "USER": parsed_db.username or "",
+            "PASSWORD": parsed_db.password or "",
+            "HOST": parsed_db.hostname or "",
+            "PORT": str(parsed_db.port or 5432),
+            "CONN_MAX_AGE": 60,
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB", "distribyutsiya"),
+            "USER": os.environ.get("POSTGRES_USER", "distribyutsiya"),
+            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
+            "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": 60,
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -114,12 +137,18 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = Path(os.environ.get("DJANGO_STATIC_ROOT", BASE_DIR / "staticfiles"))
+if not DEBUG:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = env_list("DJANGO_CORS_ALLOWED_ORIGINS")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+if render_hostname:
+    render_origin = f"https://{render_hostname}"
+    if render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(render_origin)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

@@ -17,8 +17,10 @@ export type AuthResponse = {
   user: AuthUser
 }
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL ? `${API_BASE_URL}/api` : '/api',
   withCredentials: true,
 })
 
@@ -33,8 +35,9 @@ export function setAccessToken(token: string | null) {
 
 function getCsrfToken() {
   if (!csrfInFlight) {
+    const url = API_BASE_URL ? `${API_BASE_URL}/api/auth/csrf/` : '/api/auth/csrf/'
     csrfInFlight = axios
-      .get<{ csrfToken: string }>('/api/auth/csrf/', { withCredentials: true })
+      .get<{ csrfToken: string }>(url, { withCredentials: true })
       .then(({ data }) => {
         csrfToken = data.csrfToken
         return csrfToken
@@ -48,9 +51,10 @@ function getCsrfToken() {
 
 function requestRefresh() {
   if (!refreshInFlight) {
+    const refreshUrl = API_BASE_URL ? `${API_BASE_URL}/api/auth/refresh/` : '/api/auth/refresh/'
     refreshInFlight = getCsrfToken()
       .then((token) =>
-        axios.post<{ access: string }>('/api/auth/refresh/', null, {
+        axios.post<{ access: string }>(refreshUrl, null, {
           withCredentials: true,
           headers: { 'X-CSRFToken': token },
         }),
