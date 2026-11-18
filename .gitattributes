@@ -1,0 +1,9 @@
+# Default - normalize all line endings to LF on checkin
+* text=auto eol=lf
+
+# Shell scripts must always have LF
+*.sh text eol=lf
+
+# Windows-only files can keep CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf

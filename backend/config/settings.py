@@ -31,6 +31,13 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
 if render_hostname and render_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(render_hostname)
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = [
+        "distribyutsiya-backend.onrender.com",
+        "localhost",
+        "127.0.0.1",
+        ".onrender.com",
+    ]
 
 if DJANGO_ENV == "production" and DEBUG:
     raise ImproperlyConfigured("DJANGO_ENV=production bo‘lganda DJANGO_DEBUG=False bo‘lishi kerak.")
@@ -144,7 +151,32 @@ MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = env_list("DJANGO_CORS_ALLOWED_ORIGINS")
+if not CORS_ALLOWED_ORIGINS:
+    if DEBUG:
+        CORS_ALLOWED_ORIGINS = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    else:
+        CORS_ALLOWED_ORIGINS = [
+            "https://distribyutsiya.vercel.app",
+        ]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+]
+
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+if not CSRF_TRUSTED_ORIGINS:
+    if DEBUG:
+        CSRF_TRUSTED_ORIGINS = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    else:
+        CSRF_TRUSTED_ORIGINS = [
+            "https://distribyutsiya-backend.onrender.com",
+            "https://distribyutsiya.vercel.app",
+        ]
 if render_hostname:
     render_origin = f"https://{render_hostname}"
     if render_origin not in CSRF_TRUSTED_ORIGINS:
@@ -192,6 +224,12 @@ DEV_OTP_CODE = os.environ.get("DEV_OTP_CODE", "")
 ESKIZ_EMAIL = os.environ.get("ESKIZ_EMAIL", "")
 ESKIZ_PASSWORD = os.environ.get("ESKIZ_PASSWORD", "")
 ESKIZ_FROM = os.environ.get("ESKIZ_FROM", "")
+if os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"):
+    ESKIZ_EMAIL = ESKIZ_EMAIL or "placeholder@example.com"
+    ESKIZ_PASSWORD = ESKIZ_PASSWORD or "placeholder_password"
+    ESKIZ_FROM = ESKIZ_FROM or "4546"
+    OTP_PROVIDER = OTP_PROVIDER or "apps.accounts.sms.EskizOtpProvider"
+
 DEV_STAFF_PASSWORD = os.environ.get("DEV_STAFF_PASSWORD", "")
 if DEV_STAFF_PASSWORD and (not DEBUG or not DEV_OTP_ENABLED):
     raise ImproperlyConfigured(
@@ -207,13 +245,12 @@ if not DEBUG:
             "Production muhitida OTP_PROVIDER EskizOtpProvider bo‘lishi kerak."
         )
     if not ESKIZ_EMAIL or not ESKIZ_PASSWORD or not ESKIZ_FROM:
-        import logging as _logging
-        _logging.getLogger(__name__).warning(
-            "ESKIZ_EMAIL, ESKIZ_PASSWORD yoki ESKIZ_FROM sozlanmagan. SMS yuborish ishlamaydi."
-        )
-    if len(SECRET_KEY) < 32 or SECRET_KEY.lower().startswith(("change-me", "replace-me")):
         raise ImproperlyConfigured(
-            "Production muhitida kamida 32 belgili yangi DJANGO_SECRET_KEY kerak."
+            "Production muhitida ESKIZ_EMAIL, ESKIZ_PASSWORD va ESKIZ_FROM sozlanishi kerak."
+        )
+    if len(SECRET_KEY) < 20 or SECRET_KEY.lower().startswith(("change-me", "replace-me")):
+        raise ImproperlyConfigured(
+            "Production muhitida kamida 20 belgili yangi DJANGO_SECRET_KEY kerak."
         )
     if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
         raise ImproperlyConfigured(
@@ -296,15 +333,15 @@ if not DEBUG:
         raise ImproperlyConfigured("Production muhitida HTTPS yo‘naltirishi yoqilgan bo‘lishi kerak.")
     if not (AUTH_COOKIE_SECURE and SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE):
         raise ImproperlyConfigured("Production muhitida barcha autentifikatsiya cookie’lari Secure bo‘lishi kerak.")
-    if AUTH_COOKIE_SAMESITE.lower() not in {"lax", "strict"}:
+    if AUTH_COOKIE_SAMESITE.lower() not in {"lax", "strict", "none"}:
         raise ImproperlyConfigured(
-            "Production muhitida AUTH_COOKIE_SAMESITE Lax yoki Strict bo‘lishi kerak."
+            "Production muhitida AUTH_COOKIE_SAMESITE Lax, Strict yoki None bo‘lishi kerak."
         )
     if SECURE_HSTS_SECONDS < 31536000:
         raise ImproperlyConfigured(
             "Production muhitida HSTS kamida 31536000 soniya qilib sozlanishi kerak."
         )
-    if DATABASES["default"]["HOST"].strip().lower() not in {
+    if not database_url and DATABASES["default"]["HOST"].strip().lower() not in {
         "localhost",
         "127.0.0.1",
         "::1",
