@@ -206,9 +206,9 @@ if not DEBUG:
         raise ImproperlyConfigured(
             "Production muhitida OTP_PROVIDER EskizOtpProvider bo‘lishi kerak."
         )
-    if not ESKIZ_EMAIL or not ESKIZ_PASSWORD or not ESKIZ_FROM:
-        raise ImproperlyConfigured(
-            "Production muhitida ESKIZ_EMAIL, ESKIZ_PASSWORD va ESKIZ_FROM sozlanishi kerak."
+    if not ESKIZ_EMAIL or not ESKIZ_PASSWORD:
+        logger.warning(
+            "Production muhitida ESKIZ_EMAIL yoki ESKIZ_PASSWORD kiritilmagan. SMS yuborish o'chirilgan."
         )
     if len(SECRET_KEY) < 50 or SECRET_KEY.lower().startswith(("change-me", "replace-me")):
         raise ImproperlyConfigured(
@@ -230,14 +230,15 @@ if not DEBUG:
         raise ImproperlyConfigured(
             "Production muhitidagi CORS manzillari HTTPS bo‘lishi kerak."
         )
-    if not os.environ.get("POSTGRES_DB") or not os.environ.get("POSTGRES_USER"):
-        raise ImproperlyConfigured(
-            "Production muhitida POSTGRES_DB va POSTGRES_USER aniq ko‘rsatilishi kerak."
-        )
-    if not os.environ.get("POSTGRES_PASSWORD"):
-        raise ImproperlyConfigured(
-            "Production muhitida POSTGRES_PASSWORD bo‘sh bo‘lishi mumkin emas."
-        )
+    if not database_url:
+        if not os.environ.get("POSTGRES_DB") or not os.environ.get("POSTGRES_USER"):
+            raise ImproperlyConfigured(
+                "Production muhitida POSTGRES_DB va POSTGRES_USER aniq ko‘rsatilishi kerak."
+            )
+        if not os.environ.get("POSTGRES_PASSWORD"):
+            raise ImproperlyConfigured(
+                "Production muhitida POSTGRES_PASSWORD bo‘sh bo‘lishi mumkin emas."
+            )
 
 ROUTING_EXTERNAL_ENABLED = env_bool("ROUTING_EXTERNAL_ENABLED", DEBUG)
 OSRM_BASE_URL = os.environ.get(
