@@ -211,9 +211,9 @@ if not DEBUG:
         _logging.getLogger(__name__).warning(
             "ESKIZ_EMAIL, ESKIZ_PASSWORD yoki ESKIZ_FROM sozlanmagan. SMS yuborish ishlamaydi."
         )
-    if len(SECRET_KEY) < 50 or SECRET_KEY.lower().startswith(("change-me", "replace-me")):
+    if len(SECRET_KEY) < 32 or SECRET_KEY.lower().startswith(("change-me", "replace-me")):
         raise ImproperlyConfigured(
-            "Production muhitida kamida 50 belgili yangi DJANGO_SECRET_KEY kerak."
+            "Production muhitida kamida 32 belgili yangi DJANGO_SECRET_KEY kerak."
         )
     if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
         raise ImproperlyConfigured(
