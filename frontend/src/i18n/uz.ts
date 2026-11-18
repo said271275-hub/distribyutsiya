@@ -1,6 +1,8 @@
 export const uz = {
   home: 'Umumiy',
   catalog: 'Katalog',
+  directory: 'Distribyutorlar',
+  myCompanies: 'Mening hamkorlarim',
   cart: 'Savat',
   orders: 'Buyurtmalar',
   finance: 'Hisob-kitob',

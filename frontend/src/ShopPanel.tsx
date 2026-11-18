@@ -1,10 +1,12 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Building2,
   CalendarDays,
   Check,
   ChevronDown,
   ClipboardList,
+  Clock,
   Compass,
   CreditCard,
   Home,
@@ -15,17 +17,18 @@ import {
   Plus,
   Search,
   ShoppingBag,
+  Store,
   Sun,
   Moon,
   UserRound,
   Wallet,
   X,
 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
-import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import api, { apiErrorMessage } from './api'
 import {
@@ -42,6 +45,8 @@ import './ShopPanel.css'
 import RecurringOrdersPage from './RecurringOrdersPage'
 
 const LocationPicker = lazy(() => import('./ShopMap'))
+const ShopDirectoryPage = lazy(() => import('./ShopDirectoryPage'))
+const ShopMyCompaniesPage = lazy(() => import('./ShopMyCompaniesPage'))
 
 type CopyKey = keyof typeof ru
 type Copy = (key: CopyKey) => string
@@ -205,7 +210,6 @@ function ShopPanel() {
   const location = useLocation()
   const { language, setLanguage } = useTranslation()
   const [cart, setCart] = useState<CartLine[]>([])
-  const [cartCompanyId, setCartCompanyId] = useState<number | null>(null)
   const [notice, setNotice] = useState('')
   const [repeatingLastOrder, setRepeatingLastOrder] = useState(false)
   const t: Copy = (key) => language === 'ru' ? ru[key] : uz[key]
@@ -226,11 +230,6 @@ function ShopPanel() {
   const activeContact = profile.data?.company_contacts.find((company) => company.phone)
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const addToCart = (product: CatalogProduct) => {
-    if (cartCompanyId !== null && cartCompanyId !== product.company_id) {
-      setNotice('Bir savatda faqat bitta kompaniya mahsulotlari bo‘lishi mumkin. Avval savatni yakunlang yoki tozalang.')
-      return
-    }
-    setCartCompanyId(product.company_id)
     setCart((items) => {
       const existing = items.find((item) => item.product.id === product.id)
       return existing
@@ -241,12 +240,10 @@ function ShopPanel() {
   }
   const updateCart = (productId: number, quantity: number) => {
     setCart((items) => {
-      const updated = items.map((item) => item.product.id === productId ? { ...item, quantity } : item).filter((item) => item.quantity > 0)
-      if (!updated.length) setCartCompanyId(null)
-      return updated
+      return items.map((item) => item.product.id === productId ? { ...item, quantity } : item).filter((item) => item.quantity > 0)
     })
   }
-  const clearCart = () => { setCart([]); setCartCompanyId(null) }
+  const clearCart = () => { setCart([]) }
   const repeatLastOrder = async () => {
     setRepeatingLastOrder(true)
     try {
@@ -256,7 +253,6 @@ function ShopPanel() {
         quantity: Number(quantity),
       }))
       setCart(items)
-      setCartCompanyId(items[0]?.product.company_id ?? null)
       navigate('/shop/cart')
       setNotice(data.items.length === 0
         ? t('repeatLastNone')
@@ -277,6 +273,8 @@ function ShopPanel() {
   const navItems = [
     { to: '/shop', key: 'home' as const, icon: Home, end: true },
     { to: '/shop/catalog', key: 'catalog' as const, icon: Package },
+    { to: '/shop/directory', key: 'directory' as const, icon: Building2 },
+    { to: '/shop/my-companies', key: 'myCompanies' as const, icon: Store },
     { to: '/shop/cart', key: 'cart' as const, icon: ShoppingBag, count: cartCount },
     { to: '/shop/orders', key: 'orders' as const, icon: ClipboardList },
     { to: '/shop/profile', key: 'profile' as const, icon: UserRound },
@@ -318,6 +316,8 @@ function ShopPanel() {
           <Routes>
             <Route index element={<ShopOverview profile={profile.data} profileLoading={profile.isLoading} cartCount={cartCount} t={t} />} />
             <Route path="catalog" element={<CatalogPage addToCart={addToCart} t={t} />} />
+            <Route path="directory" element={<Suspense fallback={<LoadingRows />}><ShopDirectoryPage /></Suspense>} />
+            <Route path="my-companies" element={<Suspense fallback={<LoadingRows />}><ShopMyCompaniesPage /></Suspense>} />
             <Route path="cart" element={<CartPage cart={cart} updateCart={updateCart} clearCart={clearCart} t={t} onOrdered={(id) => { clearCart(); navigate(`/shop/orders/${id}`) }} />} />
             <Route path="orders" element={<OrdersPage t={t} onRepeatLastOrder={() => void repeatLastOrder()} repeatingLastOrder={repeatingLastOrder} />} />
             <Route path="orders/:orderId" element={<OrderDetailPage t={t} onNotice={setNotice} />} />
@@ -380,7 +380,11 @@ function ProductCard({ product, onAdd, compact = false }: { product: CatalogProd
   return (
     <article className={`shop-product-card ${compact ? 'shop-product-compact' : ''}`}>
       <div className="shop-product-image">{product.image_url ? <img src={product.image_url} alt={product.name} /> : <Package size={32} strokeWidth={1.4} />}</div>
-      <div className="shop-product-company">{product.company_name}</div>
+      <div className="shop-product-company-badge">
+        <Building2 size={12} />
+        <span>{product.company_name}</span>
+        {product.company_cutoff_time && <small>· {product.company_cutoff_time.slice(0, 5)}</small>}
+      </div>
       <h3>{product.name}</h3>
       <div className="shop-product-unit">{unitLabels[product.unit]}</div>
       <div className="shop-product-price">{money(product.unit_price)} <small>/ {unitLabels[product.unit]}</small></div>
@@ -391,8 +395,10 @@ function ProductCard({ product, onAdd, compact = false }: { product: CatalogProd
 }
 
 function CatalogPage({ addToCart, t }: { addToCart: (product: CatalogProduct) => void; t: Copy }) {
+  const [searchParams] = useSearchParams()
+  const initialCompany = searchParams.get('company') || ''
   const [search, setSearch] = useState('')
-  const [companyId, setCompanyId] = useState('')
+  const [companyId, setCompanyId] = useState(initialCompany)
   const [page, setPage] = useState(1)
   const query = useQuery({
     queryKey: ['shop-catalog', companyId, search, page],
@@ -410,7 +416,7 @@ function CatalogPage({ addToCart, t }: { addToCart: (product: CatalogProduct) =>
         <label className="shop-search"><Search size={18} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder={t('search')} /></label>
         <label className="shop-select-wrap"><span className="sr-only">{t('company')}</span><select value={companyId} onChange={(event) => { setCompanyId(event.target.value); setPage(1) }}><option value="">{t('allCompanies')}</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select><ChevronDown size={16} /></label>
       </div>
-      {query.isLoading ? <LoadingRows /> : query.isError ? <ErrorState message="Katalogni yuklab bo‘lmadi" onRetry={() => void query.refetch()} t={t} /> : !products.length ? <div className="shop-empty-state"><span className="shop-empty-icon"><Package size={22} /></span><strong>{t('emptyCatalog')}</strong><p>Do‘kon profilingiz kompaniyaga ulanmagan bo‘lishi mumkin.</p><Link className="shop-secondary-button" to="/shop/profile">Profilni tekshirish</Link></div> : (
+      {query.isLoading ? <LoadingRows /> : query.isError ? <ErrorState message="Katalogni yuklab bo‘lmadi" onRetry={() => void query.refetch()} t={t} /> : !products.length ? <div className="shop-empty-state"><span className="shop-empty-icon"><Package size={22} /></span><strong>{t('emptyCatalog')}</strong><p>Do‘kon profilingiz kompaniyaga ulanmagan bo‘lishi mumkin.</p><Link className="shop-secondary-button" to="/shop/directory">Distribyutorlarni ko‘rish</Link></div> : (
         <>
           <div className="shop-product-grid">{products.map((product) => <ProductCard key={product.id} product={product} onAdd={() => addToCart(product)} />)}</div>
           <div className="shop-pagination"><span>{query.data?.count ?? 0} mahsulot</span><div><button type="button" className="shop-secondary-button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Oldingi</button><span>{page}</span><button type="button" className="shop-secondary-button" disabled={!hasNextPage} onClick={() => setPage((value) => value + 1)}>Keyingi</button></div></div>
@@ -420,61 +426,416 @@ function CatalogPage({ addToCart, t }: { addToCart: (product: CatalogProduct) =>
   )
 }
 
-function CartPage({ cart, updateCart, clearCart, onOrdered, t }: { cart: CartLine[]; updateCart: (id: number, quantity: number) => void; clearCart: () => void; onOrdered: (id: number) => void; t: Copy }) {
-  const [date, setDate] = useState(dateInDays(1))
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [note, setNote] = useState('')
+interface CompanyCartGroup {
+  company_id: number
+  company_name: string
+  company_cutoff_time: string
+  items: CartLine[]
+  subtotal: number
+}
+
+interface GroupDeliveryConfig {
+  date: string
+  from: string
+  to: string
+  note: string
+}
+
+function CartPage({
+  cart,
+  updateCart,
+  clearCart,
+  onOrdered,
+  t,
+}: {
+  cart: CartLine[]
+  updateCart: (id: number, quantity: number) => void
+  clearCart: () => void
+  onOrdered: (id: number) => void
+  t: Copy
+}) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [groupDeliveries, setGroupDeliveries] = useState<Record<number, GroupDeliveryConfig>>({})
   const [error, setError] = useState('')
   const [confirming, setConfirming] = useState(false)
-  const queryClient = useQueryClient()
-  const total = cart.reduce((sum, item) => sum + moneyInCents(Number(item.product.unit_price)) * item.quantity, 0) / 100
-  const company = cart[0]?.product
-  const submit = async () => {
-    if (!company) return
+  const [submitting, setSubmitting] = useState(false)
+  const [createdOrdersResult, setCreatedOrdersResult] = useState<ShopOrder[] | null>(null)
+
+  const groups: CompanyCartGroup[] = useMemo(() => {
+    const map = new Map<number, CompanyCartGroup>()
+    for (const line of cart) {
+      const compId = line.product.company_id
+      if (!map.has(compId)) {
+        map.set(compId, {
+          company_id: compId,
+          company_name: line.product.company_name,
+          company_cutoff_time: line.product.company_cutoff_time,
+          items: [],
+          subtotal: 0,
+        })
+      }
+      const group = map.get(compId)!
+      group.items.push(line)
+      group.subtotal += (moneyInCents(Number(line.product.unit_price)) * line.quantity) / 100
+    }
+    return Array.from(map.values())
+  }, [cart])
+
+  const grandTotal = groups.reduce((acc, g) => acc + g.subtotal, 0)
+
+  const getDeliveryConfig = (compId: number): GroupDeliveryConfig => {
+    return (
+      groupDeliveries[compId] || {
+        date: dateInDays(1),
+        from: '',
+        to: '',
+        note: '',
+      }
+    )
+  }
+
+  const updateDeliveryConfig = (compId: number, patch: Partial<GroupDeliveryConfig>) => {
+    setGroupDeliveries((prev) => ({
+      ...prev,
+      [compId]: {
+        ...getDeliveryConfig(compId),
+        ...patch,
+      },
+    }))
+  }
+
+  const submitCheckout = async () => {
     setError('')
+    setSubmitting(true)
     try {
-      const { data } = await api.post<ShopOrder>('/v1/orders/', {
-        company_id: company.company_id,
-        delivery_date: date,
-        delivery_time_from: from || null,
-        delivery_time_to: to || null,
-        note,
-        items: cart.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
+      const idempotencyKey =
+        'chk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9)
+      const payload = {
+        orders: groups.map((g) => {
+          const cfg = getDeliveryConfig(g.company_id)
+          return {
+            company_id: g.company_id,
+            delivery_date: cfg.date,
+            delivery_time_from: cfg.from || null,
+            delivery_time_to: cfg.to || null,
+            note: cfg.note,
+            items: g.items.map((item) => ({
+              product_id: item.product.id,
+              quantity: item.quantity,
+            })),
+          }
+        }),
+      }
+
+      const { data } = await api.post<{ orders: ShopOrder[] }>('/v1/shop/checkout/', payload, {
+        headers: { 'Idempotency-Key': idempotencyKey },
       })
+
       await queryClient.invalidateQueries({ queryKey: ['shop-orders'] })
       await queryClient.invalidateQueries({ queryKey: ['shop-finance'] })
-      onOrdered(data.id)
-    } catch (submitError) {
-      setError(apiErrorMessage(submitError, 'Buyurtma yuborilmadi. Kiritilgan ma’lumotlarni tekshiring.'))
+      clearCart()
       setConfirming(false)
+      setCreatedOrdersResult(data.orders)
+    } catch (submitError) {
+      setError(apiErrorMessage(submitError, 'Buyurtmalarni yuborishda xatolik yuz berdi.'))
+      setConfirming(false)
+    } finally {
+      setSubmitting(false)
     }
   }
-  if (!cart.length) return <><PageHeading eyebrow="SAVAT" title={t('cart')} /><div className="shop-empty-state"><span className="shop-empty-icon"><ShoppingBag size={22} /></span><strong>{t('emptyCart')}</strong><p>Katalogdan kerakli mahsulotlarni qo‘shing.</p><Link className="shop-primary-button" to="/shop/catalog">Katalogga o‘tish <ArrowRight size={16} /></Link></div></>
+
+  if (createdOrdersResult) {
+    return (
+      <div className="shop-checkout-success-view">
+        <PageHeading eyebrow="BUYURTMA" title="Buyurtmalar muvaffaqiyatli qabul qilindi!" />
+        <div className="shop-orders-success-card">
+          <div className="success-icon-banner">
+            <Check size={28} color="#087f68" />
+            <div>
+              <h3>{createdOrdersResult.length} ta buyurtma rasmiylashtirildi</h3>
+              <p>Har bir distribyutorga alohida buyurtma yuborildi va yetkazishga tayyorlanmoqda.</p>
+            </div>
+          </div>
+
+          <div className="shop-created-orders-list">
+            {createdOrdersResult.map((order) => (
+              <div key={order.id} className="shop-created-order-row">
+                <div>
+                  <strong>Buyurtma #{String(order.id).padStart(5, '0')}</strong>
+                  <span>{order.company_name}</span>
+                </div>
+                <div>
+                  <small>Yetkazish: {order.delivery_date}</small>
+                  <b>{money(order.total_price)}</b>
+                </div>
+                <StatusBadge status={order.status} />
+              </div>
+            ))}
+          </div>
+
+          <div className="shop-success-actions">
+            <button
+              type="button"
+              className="shop-primary-button"
+              onClick={() => {
+                if (createdOrdersResult.length === 1) {
+                  onOrdered(createdOrdersResult[0].id)
+                } else {
+                  navigate('/shop/orders')
+                }
+              }}
+            >
+              Buyurtmalar ro‘yxatiga o‘tish <ArrowRight size={16} />
+            </button>
+            <Link to="/shop/catalog" className="shop-secondary-button">
+              Katalogga qaytish
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!cart.length) {
+    return (
+      <>
+        <PageHeading eyebrow="SAVAT" title={t('cart')} />
+        <div className="shop-empty-state">
+          <span className="shop-empty-icon">
+            <ShoppingBag size={22} />
+          </span>
+          <strong>{t('emptyCart')}</strong>
+          <p>Katalogdan kerakli mahsulotlarni qo‘shing.</p>
+          <Link className="shop-primary-button" to="/shop/catalog">
+            Katalogga o‘tish <ArrowRight size={16} />
+          </Link>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
-      <PageHeading eyebrow="BUYURTMA TAYYORLASH" title={t('cart')} action={<button className="shop-text-button" type="button" onClick={clearCart}>Savatni tozalash</button>} />
-      <div className="shop-checkout-layout">
-        <section className="shop-cart-lines">
-          <div className="shop-cart-company"><span>{company?.company_name}</span><small>{t('cutoff')} {company?.company_cutoff_time.slice(0, 5)}</small></div>
-          {cart.map(({ product, quantity }) => <article className="shop-cart-line" key={product.id}>
-            <div className="shop-cart-product-icon"><Package size={22} /></div><div className="shop-cart-product"><strong>{product.name}</strong><small>{money(product.unit_price)} / {unitLabels[product.unit]}</small></div>
-            <div className="shop-stepper"><button type="button" aria-label="Kamaytirish" onClick={() => updateCart(product.id, quantity - 1)}><Minus size={15} /></button><span>{quantity}</span><button type="button" aria-label="Ko‘paytirish" onClick={() => updateCart(product.id, quantity + 1)}><Plus size={15} /></button></div>
-            <strong className="shop-line-total">{money(Number(product.unit_price) * quantity)}</strong>
-          </article>)}
-          <div className="shop-cart-total"><span>{t('total')}</span><strong>{money(total)}</strong></div>
-        </section>
-        <section className="shop-delivery-form">
-          <div className="shop-form-heading"><MapPin size={19} /><div><h2>Yetkazish tafsilotlari</h2><p>Sana va qulay vaqtni tanlang</p></div></div>
-          <label className="shop-field">{t('deliveryDate')}<input type="date" min={dateInDays(1)} value={date} onChange={(event) => setDate(event.target.value)} /></label>
-          <div className="shop-field-grid"><label className="shop-field">{t('deliveryFrom')}<input type="time" value={from} onChange={(event) => setFrom(event.target.value)} /></label><label className="shop-field">{t('deliveryTo')}<input type="time" value={to} onChange={(event) => setTo(event.target.value)} /></label></div>
-          <label className="shop-field">{t('note')}<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Yetkazish bo‘yicha qo‘shimcha ma’lumot" /></label>
-          {error && <div className="shop-form-error" role="alert">{error}</div>}
-          <button className="shop-primary-button shop-wide-button" type="button" onClick={() => setConfirming(true)}>{t('checkout')} <ArrowRight size={17} /></button>
-          <p className="shop-cutoff-footnote">{t('cutoff')} <strong>{company?.company_cutoff_time.slice(0, 5)}</strong></p>
-        </section>
+      <PageHeading
+        eyebrow="BUYURTMA TAYYORLASH"
+        title={t('cart')}
+        action={
+          <button className="shop-text-button" type="button" onClick={clearCart}>
+            Savatni tozalash
+          </button>
+        }
+      />
+
+      <div className="shop-multi-checkout-container">
+        <div className="shop-cart-groups-list">
+          {groups.map((group) => {
+            const config = getDeliveryConfig(group.company_id)
+            return (
+              <section key={group.company_id} className="shop-cart-company-group">
+                <div className="shop-group-header">
+                  <div className="shop-group-company-info">
+                    <Building2 size={18} />
+                    <strong>{group.company_name}</strong>
+                  </div>
+                  <span className="shop-cutoff-badge">
+                    <Clock size={13} /> Cutoff: {group.company_cutoff_time.slice(0, 5)}
+                  </span>
+                </div>
+
+                <div className="shop-group-items-list">
+                  {group.items.map(({ product, quantity }) => (
+                    <article className="shop-cart-line" key={product.id}>
+                      <div className="shop-cart-product-icon">
+                        <Package size={22} />
+                      </div>
+                      <div className="shop-cart-product">
+                        <strong>{product.name}</strong>
+                        <small>
+                          {money(product.unit_price)} / {unitLabels[product.unit]}
+                        </small>
+                      </div>
+                      <div className="shop-stepper">
+                        <button
+                          type="button"
+                          aria-label="Kamaytirish"
+                          onClick={() => updateCart(product.id, quantity - 1)}
+                        >
+                          <Minus size={15} />
+                        </button>
+                        <span>{quantity}</span>
+                        <button
+                          type="button"
+                          aria-label="Ko‘paytirish"
+                          onClick={() => updateCart(product.id, quantity + 1)}
+                        >
+                          <Plus size={15} />
+                        </button>
+                      </div>
+                      <strong className="shop-line-total">
+                        {money(Number(product.unit_price) * quantity)}
+                      </strong>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="shop-group-delivery-settings">
+                  <h4>Yetkazish tafsilotlari ({group.company_name})</h4>
+                  <div className="shop-field-grid">
+                    <label className="shop-field">
+                      {t('deliveryDate')}
+                      <input
+                        type="date"
+                        min={dateInDays(1)}
+                        value={config.date}
+                        onChange={(e) =>
+                          updateDeliveryConfig(group.company_id, { date: e.target.value })
+                        }
+                      />
+                    </label>
+                    <div className="shop-time-range-grid">
+                      <label className="shop-field">
+                        Dan
+                        <input
+                          type="time"
+                          value={config.from}
+                          onChange={(e) =>
+                            updateDeliveryConfig(group.company_id, { from: e.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="shop-field">
+                        Gacha
+                        <input
+                          type="time"
+                          value={config.to}
+                          onChange={(e) =>
+                            updateDeliveryConfig(group.company_id, { to: e.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <label className="shop-field" style={{ marginTop: 8 }}>
+                    {t('note')}
+                    <input
+                      value={config.note}
+                      onChange={(e) =>
+                        updateDeliveryConfig(group.company_id, { note: e.target.value })
+                      }
+                      placeholder="Ushbu distribyutor uchun qo‘shimcha izoh (ixtiyoriy)"
+                    />
+                  </label>
+                </div>
+
+                <div className="shop-group-subtotal">
+                  <span>Kompaniya bo‘yicha oraliq summa:</span>
+                  <strong>{money(group.subtotal)}</strong>
+                </div>
+              </section>
+            )
+          })}
+        </div>
+
+        <aside className="shop-checkout-summary-sidebar">
+          <div className="shop-summary-card">
+            <h3>Buyurtma xulosasi</h3>
+            <div className="summary-row">
+              <span>Distribyutorlar soni:</span>
+              <strong>{groups.length} ta</strong>
+            </div>
+            <div className="summary-row">
+              <span>Jami tovarlar:</span>
+              <strong>{cart.reduce((sum, item) => sum + item.quantity, 0)} ta</strong>
+            </div>
+
+            <div className="summary-companies-breakdown">
+              {groups.map((g) => (
+                <div key={g.company_id} className="breakdown-row">
+                  <span>{g.company_name}</span>
+                  <b>{money(g.subtotal)}</b>
+                </div>
+              ))}
+            </div>
+
+            <div className="summary-grand-total">
+              <span>Jami to‘lov summasi:</span>
+              <strong>{money(grandTotal)}</strong>
+            </div>
+
+            {error && <div className="shop-form-error" role="alert">{error}</div>}
+
+            <button
+              className="shop-primary-button shop-wide-button"
+              type="button"
+              onClick={() => setConfirming(true)}
+            >
+              Hammasiga buyurtma berish <ArrowRight size={17} />
+            </button>
+            <p className="shop-cutoff-footnote">
+              Har bir distribyutor o‘z cutoff vaqti va yetkazish sanasi bo‘yicha buyurtmani qabul qiladi.
+            </p>
+          </div>
+        </aside>
       </div>
-      {confirming && <div className="shop-modal-backdrop" role="presentation" onClick={() => setConfirming(false)}><section className="shop-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" onClick={(event) => event.stopPropagation()}><button className="shop-modal-close" type="button" aria-label="Yopish" onClick={() => setConfirming(false)}><X size={18} /></button><span className="shop-modal-icon"><ShoppingBag size={23} /></span><h2 id="confirm-title">{t('confirmOrder')}?</h2><p>{company?.company_name} kompaniyasiga {money(total)} miqdorida buyurtma yuboriladi.</p><div className="shop-modal-actions"><button className="shop-secondary-button" type="button" onClick={() => setConfirming(false)}>Ortga</button><button className="shop-primary-button" type="button" onClick={() => void submit()}>{t('confirmOrder')} <Check size={16} /></button></div></section></div>}
+
+      {confirming && (
+        <div
+          className="shop-modal-backdrop"
+          role="presentation"
+          onClick={() => setConfirming(false)}
+        >
+          <section
+            className="shop-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="shop-modal-close"
+              type="button"
+              aria-label="Yopish"
+              onClick={() => setConfirming(false)}
+            >
+              <X size={18} />
+            </button>
+            <span className="shop-modal-icon">
+              <ShoppingBag size={23} />
+            </span>
+            <h2 id="confirm-title">Buyurtmalarni tasdiqlaysizmi?</h2>
+            <p>
+              Jami <strong>{groups.length} ta distribyutor</strong>ga umumiy{' '}
+              <strong>{money(grandTotal)}</strong> miqdorida buyurtmalar yuboriladi:
+            </p>
+            <ul className="shop-confirm-breakdown-list">
+              {groups.map((g) => (
+                <li key={g.company_id}>
+                  <span>{g.company_name}:</span>
+                  <strong>{money(g.subtotal)}</strong>
+                </li>
+              ))}
+            </ul>
+            <div className="shop-modal-actions">
+              <button
+                className="shop-secondary-button"
+                type="button"
+                onClick={() => setConfirming(false)}
+              >
+                Ortga
+              </button>
+              <button
+                className="shop-primary-button"
+                type="button"
+                disabled={submitting}
+                onClick={() => void submitCheckout()}
+              >
+                {submitting ? 'Yuborilmoqda...' : 'Tasdiqlash'} <Check size={16} />
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   )
 }

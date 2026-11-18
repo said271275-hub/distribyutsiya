@@ -1140,6 +1140,8 @@ function App() {
       <Route path="/password/change" element={<ProtectedRoute><PasswordChangePage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute roles={['super_admin']}><RoleLandingPage /></ProtectedRoute>} />
+      <Route path="/directory/companies" element={<ProtectedRoute roles={['shop_owner']}><Navigate to="/shop/directory" replace /></ProtectedRoute>} />
+      <Route path="/my/companies" element={<ProtectedRoute roles={['shop_owner']}><Navigate to="/shop/my-companies" replace /></ProtectedRoute>} />
       <Route path="/company/*" element={<ProtectedRoute roles={['company_admin']}><Suspense fallback={<main className="full-loader">{t('common.loading')}</main>}><DispatcherPanel /></Suspense></ProtectedRoute>} />
       <Route path="/driver/*" element={<ProtectedRoute roles={['driver']}><Suspense fallback={<main className="full-loader">{t('common.loading')}</main>}><DriverPanel /></Suspense></ProtectedRoute>} />
       <Route path="/shop/*" element={<ProtectedRoute roles={['shop_owner']}><Suspense fallback={<main className="full-loader">{t('common.loading')}</main>}><ShopPanel /></Suspense></ProtectedRoute>} />

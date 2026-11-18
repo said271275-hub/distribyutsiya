@@ -3,6 +3,8 @@ import type { TranslationKey } from './uz'
 export const ru: Record<TranslationKey, string> = {
   home: 'Обзор',
   catalog: 'Каталог',
+  directory: 'Дистрибьюторы',
+  myCompanies: 'Мои компании',
   cart: 'Корзина',
   orders: 'Мои заказы',
   finance: 'Баланс и платежи',
