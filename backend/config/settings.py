@@ -207,8 +207,9 @@ if not DEBUG:
             "Production muhitida OTP_PROVIDER EskizOtpProvider bo‘lishi kerak."
         )
     if not ESKIZ_EMAIL or not ESKIZ_PASSWORD or not ESKIZ_FROM:
-        raise ImproperlyConfigured(
-            "Production muhitida ESKIZ_EMAIL, ESKIZ_PASSWORD va ESKIZ_FROM sozlanishi kerak."
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "ESKIZ_EMAIL, ESKIZ_PASSWORD yoki ESKIZ_FROM sozlanmagan. SMS yuborish ishlamaydi."
         )
     if len(SECRET_KEY) < 50 or SECRET_KEY.lower().startswith(("change-me", "replace-me")):
         raise ImproperlyConfigured(

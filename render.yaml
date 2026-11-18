@@ -30,16 +30,16 @@ services:
       - key: AUTH_COOKIE_SAMESITE
         value: "None"
       - key: DJANGO_ALLOWED_HOSTS
-        sync: false
+        value: distribyutsiya-backend.onrender.com
       - key: DJANGO_CORS_ALLOWED_ORIGINS
-        sync: false
+        value: https://distribyutsiya.vercel.app
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        sync: false
+        value: https://distribyutsiya-backend.onrender.com
       - key: OTP_PROVIDER
         value: apps.accounts.sms.EskizOtpProvider
       - key: ESKIZ_EMAIL
-        sync: false
+        value: placeholder@example.com
       - key: ESKIZ_PASSWORD
-        sync: false
+        value: placeholder_password
       - key: ESKIZ_FROM
         value: "4546"
