@@ -5,7 +5,7 @@ import { Controller, useForm, type Control } from 'react-hook-form'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { useAuth } from './useAuth'
-import { useTheme } from './useTheme'
+import { StickmanThemeToggle } from './StickmanThemeToggle'
 import api, { apiErrorMessage, type UserRole } from './api'
 import { formatDate } from './i18n/format'
 import { LanguageSelect } from './i18n/LanguageSelect'
@@ -83,33 +83,7 @@ function normalizePhone(value: string) {
 }
 
 function ThemeToggle() {
-  const { t } = useTranslation()
-  const { theme, isDark, setTheme } = useTheme()
-
-  const cycleTheme = () => {
-    if (theme === 'light') setTheme('dark')
-    else if (theme === 'dark') setTheme('system')
-    else setTheme('light')
-  }
-
-  const label =
-    theme === 'system'
-      ? `${t('theme.dark')} / ${t('theme.light')} (Auto)`
-      : isDark
-        ? t('theme.light')
-        : t('theme.dark')
-
-  return (
-    <button
-      type="button"
-      onClick={cycleTheme}
-      className="theme-toggle"
-      aria-label={label}
-      title={label}
-    >
-      {theme === 'system' ? '💻' : isDark ? '☀' : '🌙'}
-    </button>
-  )
+  return <StickmanThemeToggle />
 }
 
 function Brand({ inverse = false }: { inverse?: boolean }) {

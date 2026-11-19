@@ -12,12 +12,10 @@ import {
   Clock3,
   FileText,
   LogOut,
-  Moon,
   Package,
   RotateCw,
   Search,
   ShieldAlert,
-  Sun,
   Truck,
   UserCheck,
   X,
@@ -30,13 +28,14 @@ import {
   Wallet,
 } from 'lucide-react'
 import { Fragment } from 'react'
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense } from 'react'
 import axios from 'axios'
 import api, { apiErrorMessage } from './api'
 import { useAuth } from './useAuth'
+import { StickmanThemeToggle } from './StickmanThemeToggle'
 import type { CompanyMe } from './CompanyProfilePage'
 import {
   buildOrderQueryParams,
@@ -138,22 +137,7 @@ function localDate() {
 }
 
 function DispatcherThemeToggle() {
-  const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark')
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
-  }, [dark])
-
-  return (
-    <button
-      type="button"
-      className="dispatcher-icon-button"
-      aria-label={dark ? 'Yorug‘ rejimga o‘tish' : 'Qorong‘i rejimga o‘tish'}
-      onClick={() => setDark((value) => !value)}
-    >
-      {dark ? <Sun size={18} /> : <Moon size={18} />}
-    </button>
-  )
+  return <StickmanThemeToggle />
 }
 
 function DispatcherPanel() {

@@ -18,9 +18,6 @@ import {
   Search,
   ShoppingBag,
   Store,
-  Sun,
-  Moon,
-  Laptop,
   UserRound,
   Wallet,
   X,
@@ -39,7 +36,7 @@ import {
   formatFinanceMoney,
 } from './dispatcherFinanceUtils'
 import { useAuth } from './useAuth'
-import { useTheme } from './useTheme'
+import { StickmanThemeToggle } from './StickmanThemeToggle'
 import { useTranslation } from './i18n/useTranslation'
 import { ru } from './i18n/ru'
 import { uz } from './i18n/uz'
@@ -186,32 +183,7 @@ function dateInDays(days: number) {
 }
 
 function ShopThemeToggle() {
-  const { theme, isDark, setTheme } = useTheme()
-
-  const cycleTheme = () => {
-    if (theme === 'light') setTheme('dark')
-    else if (theme === 'dark') setTheme('system')
-    else setTheme('light')
-  }
-
-  const label =
-    theme === 'system'
-      ? 'Tizim rejimi (Avto)'
-      : isDark
-        ? 'Yorug‘ rejimga o‘tish'
-        : 'Qorong‘i rejimga o‘tish'
-
-  return (
-    <button
-      className="shop-icon-button"
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={cycleTheme}
-    >
-      {theme === 'system' ? <Laptop size={18} /> : isDark ? <Sun size={18} /> : <Moon size={18} />}
-    </button>
-  )
+  return <StickmanThemeToggle />
 }
 
 function LoadingRows() {
