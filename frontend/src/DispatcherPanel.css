@@ -1293,3 +1293,71 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+/* ========================================================
+   DISPATCHER PANEL TUGMALARI VA KUNDUZGI / TUNGI STILLAR
+   ======================================================== */
+.dispatcher-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  color: #ffffff !important;
+  background-color: var(--accent) !important;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.dispatcher-primary-button:hover {
+  background-color: var(--accent-hover) !important;
+}
+
+.dispatcher-primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dark .dispatcher-primary-button {
+  color: #121c19 !important;
+  background-color: var(--accent) !important;
+  font-weight: 700;
+}
+
+.dark .dispatcher-primary-button:hover {
+  background-color: var(--accent-hover) !important;
+}
+
+.dispatcher-order-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--dispatcher-line);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--dispatcher-text);
+  background: var(--dispatcher-surface);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dispatcher-order-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.dispatcher-order-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

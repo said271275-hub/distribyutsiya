@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models
 
 from apps.core.models import CompanyOwnedModel
@@ -12,14 +12,16 @@ class Product(CompanyOwnedModel):
         BLOCK = "block", "Blok"
 
     name = models.CharField(max_length=200)
-    # Allow any image format (including SVG) and larger files up to 10 MB
+    # Allow any image format (including SVG, JFIF, AVIF) and larger files up to 15 MB
     image = models.FileField(
         upload_to="catalog/products/",
         blank=True,
         validators=[
-            # Accept common raster formats and SVG vector format
-            # (Extension check only; size validation is done in serializer/frontend)
-            FileExtensionValidator(allowed_extensions=["jpg","jpeg","png","webp","svg"]),
+            FileExtensionValidator(
+                allowed_extensions=[
+                    "jpg", "jpeg", "jfif", "pjpeg", "pjp", "png", "webp", "svg", "avif", "gif"
+                ]
+            ),
         ],
     )
     unit = models.CharField(max_length=10, choices=Unit.choices)

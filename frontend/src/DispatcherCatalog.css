@@ -2,3 +2,163 @@
 @media(max-width:900px){.dispatcher-shop-price-form{grid-template-columns:1fr 1fr}.dispatcher-shop-price-form>button{grid-column:2}}
 @media(max-width:640px){.dispatcher-catalog-page{gap:13px}.dispatcher-catalog-heading{align-items:stretch}.dispatcher-catalog-heading>.dispatcher-primary-button{width:100%}.dispatcher-catalog-products,.dispatcher-shop-pricing{padding:13px}.dispatcher-catalog-row-actions{align-items:stretch;flex-direction:column}.dispatcher-catalog-row-actions .dispatcher-order-action{padding-inline:5px;font-size:8px}.dispatcher-product-form-grid{grid-template-columns:1fr}.dispatcher-shop-price-form{grid-template-columns:1fr}.dispatcher-shop-price-form>button{grid-column:auto}.dispatcher-catalog-table th,.dispatcher-catalog-table td{padding-inline:9px}}
 .dispatcher-product-image-preview{width:88px;height:68px;object-fit:cover;border:1px solid var(--dispatcher-line);border-radius:6px}
+
+/* ========================================================
+   YANGI RASM YUKLASH (UPLOAD) VA PREVIEW STILLARI
+   ======================================================== */
+.dispatcher-image-field-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dispatcher-field-title {
+  color: var(--dispatcher-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.dispatcher-file-hidden {
+  display: none !important;
+}
+
+/* Rasm yuklash maydoni (Dropzone) */
+.dispatcher-image-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 18px 14px;
+  border: 2px dashed var(--dispatcher-line);
+  border-radius: var(--radius-md, 8px);
+  background-color: var(--dispatcher-canvas);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.dispatcher-image-dropzone:hover {
+  border-color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 8%, var(--dispatcher-canvas));
+}
+
+.dispatcher-dropzone-icon-wrap {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.dispatcher-dropzone-main-text {
+  color: var(--dispatcher-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dispatcher-dropzone-sub-text {
+  color: var(--dispatcher-muted);
+  font-size: 11px;
+}
+
+/* Tanlangan rasm kartasi (Preview Card) */
+.dispatcher-image-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--dispatcher-line);
+  border-radius: var(--radius-md, 8px);
+  background-color: var(--dispatcher-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.dispatcher-image-preview-thumb {
+  width: 58px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--dispatcher-line);
+  background-color: var(--dispatcher-canvas);
+  flex-shrink: 0;
+}
+
+.dispatcher-image-preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dispatcher-image-name {
+  color: var(--dispatcher-text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dispatcher-image-size {
+  color: var(--dispatcher-muted);
+  font-size: 11px;
+}
+
+.dispatcher-image-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--status-ok, #17764f);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.dispatcher-image-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.dispatcher-image-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--dispatcher-line);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--dispatcher-text);
+  background-color: var(--dispatcher-surface);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dispatcher-image-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.dispatcher-image-delete-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--dispatcher-line);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--dispatcher-muted);
+  background-color: var(--dispatcher-surface);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dispatcher-image-delete-btn:hover {
+  border-color: var(--status-bad);
+  color: var(--status-bad);
+  background-color: color-mix(in srgb, var(--status-bad) 10%, transparent);
+}

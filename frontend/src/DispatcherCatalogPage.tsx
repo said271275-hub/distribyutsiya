@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Archive, Check, LoaderCircle, Pencil, Plus, Save, Store, Tags, X } from 'lucide-react'
-import { useState, type ChangeEvent } from 'react'
+import { Archive, Check, LoaderCircle, Pencil, Plus, Save, Store, Tags, UploadCloud, X } from 'lucide-react'
+import { useState, useEffect, type ChangeEvent } from 'react'
 import { useForm } from 'react-hook-form'
 import api, { apiErrorMessage } from './api';
 import { MAX_IMAGE_SIZE_MB } from './constants'
@@ -56,7 +56,18 @@ export default function DispatcherCatalogPage() {
   const [showProductForm, setShowProductForm] = useState(false)
   const [pageError, setPageError] = useState('')
   const [productImage, setProductImage] = useState<File | null>(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [productImageError, setProductImageError] = useState('')
+
+  useEffect(() => {
+    if (!productImage) {
+      setImagePreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(productImage)
+    setImagePreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [productImage])
   const productForm = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
     defaultValues: emptyProduct,
@@ -136,13 +147,16 @@ export default function DispatcherCatalogPage() {
       setProductImageError('Mahsulot rasmini tanlang.')
       return
     }
-    if (productImage && !productImage.type.startsWith('image/')) {
-      setProductImageError('Faqat rasm faylini tanlang.')
-      return
-    }
-    if (productImage && productImage.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
-      setProductImageError('Rasm hajmi 5 MB dan oshmasin.')
-      return
+    if (productImage) {
+      const allowedExt = /\.(jpe?g|png|webp|jfif|pjpeg|pjp|svg|avif|gif)$/i
+      if (!productImage.type.startsWith('image/') && !allowedExt.test(productImage.name)) {
+        setProductImageError('Faqat rasm faylini tanlang (JPG, PNG, WEBP, JFIF, SVG).')
+        return
+      }
+      if (productImage.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+        setProductImageError(`Rasm hajmi ${MAX_IMAGE_SIZE_MB} MB dan oshmasin.`)
+        return
+      }
     }
     setProductImageError('')
     productMutation.mutate({ id: editingProduct?.id, values, image: productImage })
@@ -262,21 +276,102 @@ export default function DispatcherCatalogPage() {
               <input {...productForm.register('name')} maxLength={200} />
               {productForm.formState.errors.name && <small role="alert">{productForm.formState.errors.name.message}</small>}
             </label>
-            <label>
-              <span>Mahsulot rasmi{!editingProduct ? ' (majburiy)' : ' (ixtiyoriy)'}</span>
-              {editingProduct?.image && !productImage && (
-                <img className="dispatcher-product-image-preview" src={editingProduct.image} alt={`${editingProduct.name} rasmi`} />
+            <div className="dispatcher-image-field-wrap">
+              <span className="dispatcher-field-title">
+                Mahsulot rasmi{!editingProduct ? ' (majburiy)' : ' (ixtiyoriy)'}
+              </span>
+
+              {imagePreviewUrl ? (
+                <div className="dispatcher-image-preview-card">
+                  <img
+                    src={imagePreviewUrl}
+                    alt="Tanlangan mahsulot rasmi"
+                    className="dispatcher-image-preview-thumb"
+                  />
+                  <div className="dispatcher-image-preview-meta">
+                    <span className="dispatcher-image-name" title={productImage?.name}>
+                      {productImage?.name}
+                    </span>
+                    <span className="dispatcher-image-size">
+                      {productImage ? (productImage.size / (1024 * 1024)).toFixed(2) + ' MB' : ''}
+                    </span>
+                    <span className="dispatcher-image-status-pill">
+                      <Check size={12} /> Tayyor
+                    </span>
+                  </div>
+                  <div className="dispatcher-image-preview-actions">
+                    <label className="dispatcher-image-action-btn" title="Rasmni almashtirish">
+                      <UploadCloud size={14} /> Almashtirish
+                      <input
+                        type="file"
+                        accept="image/*,.jfif,.pjpeg,.pjp,.svg,.webp,.png,.jpg,.jpeg"
+                        className="dispatcher-file-hidden"
+                        onChange={selectProductImage}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="dispatcher-image-delete-btn"
+                      onClick={() => {
+                        setProductImage(null)
+                        setProductImageError('')
+                      }}
+                      title="Rasmni o‘chirish"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </div>
+              ) : editingProduct?.image ? (
+                <div className="dispatcher-image-preview-card">
+                  <img
+                    src={editingProduct.image}
+                    alt={`${editingProduct.name} joriy rasmi`}
+                    className="dispatcher-image-preview-thumb"
+                  />
+                  <div className="dispatcher-image-preview-meta">
+                    <span className="dispatcher-image-name">Hozirgi mahsulot rasmi</span>
+                    <span className="dispatcher-image-size">Mavjud rasm saqlangan</span>
+                  </div>
+                  <div className="dispatcher-image-preview-actions">
+                    <label className="dispatcher-image-action-btn">
+                      <UploadCloud size={14} /> Yangi rasm tanlash
+                      <input
+                        type="file"
+                        accept="image/*,.jfif,.pjpeg,.pjp,.svg,.webp,.png,.jpg,.jpeg"
+                        className="dispatcher-file-hidden"
+                        onChange={selectProductImage}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <label className="dispatcher-image-dropzone">
+                  <div className="dispatcher-dropzone-icon-wrap">
+                    <UploadCloud size={24} />
+                  </div>
+                  <span className="dispatcher-dropzone-main-text">
+                    Rasm tanlash uchun bosing
+                  </span>
+                  <span className="dispatcher-dropzone-sub-text">
+                    JPG, PNG, JFIF, WEBP yoki SVG ({MAX_IMAGE_SIZE_MB} MB gacha)
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.jfif,.pjpeg,.pjp,.svg,.webp,.png,.jpg,.jpeg"
+                    className="dispatcher-file-hidden"
+                    required={!editingProduct}
+                    onChange={selectProductImage}
+                  />
+                </label>
               )}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                required={!editingProduct}
-                onChange={selectProductImage}
-              />
-              <small>Rasm fayli, hajmi 5 MB gacha.</small>
-              {productImage && <small>Tanlandi: {productImage.name}</small>}
-              {productImageError && <small role="alert">{productImageError}</small>}
-            </label>
+
+              {productImageError && (
+                <small className="dispatcher-catalog-form-error" role="alert">
+                  {productImageError}
+                </small>
+              )}
+            </div>
             <div className="dispatcher-product-form-grid">
               <label>
                 <span>O‘lchov birligi</span>

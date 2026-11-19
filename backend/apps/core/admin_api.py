@@ -261,11 +261,14 @@ class CompanyAdminViewSet(viewsets.GenericViewSet):
 
 
 class ProductAdminSerializer(serializers.ModelSerializer):
-    MAX_IMAGE_SIZE = 5 * 1024 * 1024
+    MAX_IMAGE_SIZE = 15 * 1024 * 1024
     IMAGE_EXTENSIONS = {
-        "JPEG": {".jpg", ".jpeg"},
+        "JPEG": {".jpg", ".jpeg", ".jfif", ".pjpeg", ".pjp"},
         "PNG": {".png"},
         "WEBP": {".webp"},
+        "GIF": {".gif"},
+        "AVIF": {".avif"},
+        "BMP": {".bmp"},
     }
 
     def get_fields(self):
@@ -275,25 +278,37 @@ class ProductAdminSerializer(serializers.ModelSerializer):
 
     def validate_image(self, image):
         if image.size > self.MAX_IMAGE_SIZE:
-            raise serializers.ValidationError("Rasm hajmi 5 MB dan oshmasin.")
+            raise serializers.ValidationError("Rasm hajmi 15 MB dan oshmasin.")
         extension = image.name.rsplit(".", 1)[-1].lower() if "." in image.name else ""
         extension = f".{extension}" if extension else ""
+
+        if extension == ".svg":
+            content_sample = image.read(2048).decode("utf-8", errors="ignore").lower()
+            image.seek(0)
+            if "<svg" not in content_sample:
+                raise serializers.ValidationError("Faqat haqiqiy SVG rasmini yuklang.")
+            image.name = f"{uuid.uuid4().hex}{extension}"
+            return image
+
         try:
             with Image.open(image) as uploaded_image:
                 image_format = uploaded_image.format
                 uploaded_image.verify()
         except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as error:
             raise serializers.ValidationError(
-                "Faqat haqiqiy JPG, PNG yoki WebP rasmini yuklang."
+                "Faqat haqiqiy rasm (JPG, PNG, WebP, JFIF, SVG) faylini yuklang."
             ) from error
         finally:
             image.seek(0)
 
         allowed_extensions = self.IMAGE_EXTENSIONS.get(image_format)
         if allowed_extensions is None or extension not in allowed_extensions:
-            raise serializers.ValidationError(
-                "Faqat haqiqiy JPG, PNG yoki WebP rasmini mos fayl kengaytmasi bilan yuklang."
-            )
+            if image_format == "JPEG" and extension in {".jpg", ".jpeg", ".jfif", ".pjpeg", ".pjp"}:
+                pass
+            else:
+                raise serializers.ValidationError(
+                    "Faqat haqiqiy rasm (JPG, PNG, WebP, JFIF, SVG) faylini mos fayl kengaytmasi bilan yuklang."
+                )
 
         image.name = f"{uuid.uuid4().hex}{extension}"
         return image

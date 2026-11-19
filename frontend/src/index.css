@@ -8,23 +8,23 @@
   --surface: #ffffff;
   --surface-raised: #f1f5f9;
   --modal: #ffffff;
-  --border: #e2e8f0;
-  --border-muted: #edf2f7;
+  --border: #cbd5e1;
+  --border-muted: #e2e8f0;
 
   /* Tipografiya */
   --text: #0f172a;
-  --text-muted: #64748b;
+  --text-muted: #475569;
 
   /* Brend aksent yashil */
-  --accent: var(--accent);
+  --accent: #087f68;
   --accent-hover: #066a57;
   --accent-soft: #e6f6f1;
-  --focus-ring: var(--accent);
+  --focus-ring: #087f68;
 
   /* Semantik holat tokenlari */
-  --status-ok: var(--accent);
+  --status-ok: #17764f;
   --status-warn: #b7791f;
-  --status-bad: var(--status-bad);
+  --status-bad: #b33a46;
   --status-info: #0284c7;
 
   --success: var(--status-ok);
