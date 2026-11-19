@@ -12,7 +12,16 @@ class Product(CompanyOwnedModel):
         BLOCK = "block", "Blok"
 
     name = models.CharField(max_length=200)
-    image = models.ImageField(upload_to="catalog/products/", blank=True)
+    # Allow any image format (including SVG) and larger files up to 10 MB
+    image = models.FileField(
+        upload_to="catalog/products/",
+        blank=True,
+        validators=[
+            # Accept common raster formats and SVG vector format
+            # (Extension check only; size validation is done in serializer/frontend)
+            FileExtensionValidator(allowed_extensions=["jpg","jpeg","png","webp","svg"]),
+        ],
+    )
     unit = models.CharField(max_length=10, choices=Unit.choices)
     price = models.DecimalField(
         max_digits=12, decimal_places=2, validators=(MinValueValidator(0),)

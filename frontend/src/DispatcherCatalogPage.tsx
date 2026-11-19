@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Archive, Check, LoaderCircle, Pencil, Plus, Save, Store, Tags, X } from 'lucide-react'
 import { useState, type ChangeEvent } from 'react'
 import { useForm } from 'react-hook-form'
-import api, { apiErrorMessage } from './api'
+import api, { apiErrorMessage } from './api';
+import { MAX_IMAGE_SIZE_MB } from './constants'
 import {
   buildProductPayload,
   buildProductFormData,
@@ -139,7 +140,7 @@ export default function DispatcherCatalogPage() {
       setProductImageError('Faqat rasm faylini tanlang.')
       return
     }
-    if (productImage && productImage.size > 5 * 1024 * 1024) {
+    if (productImage && productImage.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
       setProductImageError('Rasm hajmi 5 MB dan oshmasin.')
       return
     }
