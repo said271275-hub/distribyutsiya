@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Controller, useForm, type Control } from 'react-hook-form'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { useAuth } from './useAuth'
+import { useTheme } from './useTheme'
 import api, { apiErrorMessage, type UserRole } from './api'
 import { formatDate } from './i18n/format'
 import { LanguageSelect } from './i18n/LanguageSelect'
@@ -83,22 +84,30 @@ function normalizePhone(value: string) {
 
 function ThemeToggle() {
   const { t } = useTranslation()
-  const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark')
+  const { theme, isDark, setTheme } = useTheme()
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
-  }, [dark])
+  const cycleTheme = () => {
+    if (theme === 'light') setTheme('dark')
+    else if (theme === 'dark') setTheme('system')
+    else setTheme('light')
+  }
+
+  const label =
+    theme === 'system'
+      ? `${t('theme.dark')} / ${t('theme.light')} (Auto)`
+      : isDark
+        ? t('theme.light')
+        : t('theme.dark')
 
   return (
     <button
       type="button"
-      onClick={() => setDark((value) => !value)}
+      onClick={cycleTheme}
       className="theme-toggle"
-      aria-label={t(dark ? 'theme.switchLight' : 'theme.switchDark')}
-      title={t(dark ? 'theme.light' : 'theme.dark')}
+      aria-label={label}
+      title={label}
     >
-      {dark ? '☀' : '◐'}
+      {theme === 'system' ? '💻' : isDark ? '☀' : '🌙'}
     </button>
   )
 }

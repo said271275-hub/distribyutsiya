@@ -20,6 +20,7 @@ import {
   Store,
   Sun,
   Moon,
+  Laptop,
   UserRound,
   Wallet,
   X,
@@ -38,6 +39,7 @@ import {
   formatFinanceMoney,
 } from './dispatcherFinanceUtils'
 import { useAuth } from './useAuth'
+import { useTheme } from './useTheme'
 import { useTranslation } from './i18n/useTranslation'
 import { ru } from './i18n/ru'
 import { uz } from './i18n/uz'
@@ -184,14 +186,30 @@ function dateInDays(days: number) {
 }
 
 function ShopThemeToggle() {
-  const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark')
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
-  }, [dark])
+  const { theme, isDark, setTheme } = useTheme()
+
+  const cycleTheme = () => {
+    if (theme === 'light') setTheme('dark')
+    else if (theme === 'dark') setTheme('system')
+    else setTheme('light')
+  }
+
+  const label =
+    theme === 'system'
+      ? 'Tizim rejimi (Avto)'
+      : isDark
+        ? 'Yorug‘ rejimga o‘tish'
+        : 'Qorong‘i rejimga o‘tish'
+
   return (
-    <button className="shop-icon-button" type="button" aria-label={dark ? 'Yorug‘ rejim' : 'Qorong‘i rejim'} onClick={() => setDark((value) => !value)}>
-      {dark ? <Sun size={18} /> : <Moon size={18} />}
+    <button
+      className="shop-icon-button"
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={cycleTheme}
+    >
+      {theme === 'system' ? <Laptop size={18} /> : isDark ? <Sun size={18} /> : <Moon size={18} />}
     </button>
   )
 }

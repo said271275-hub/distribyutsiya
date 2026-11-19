@@ -3,35 +3,65 @@
 
 :root {
   color-scheme: light;
-  --surface: #e8eef3;
-  --surface-raised: #e8eef3;
-  --canvas: #e3eaf0;
-  --shadow-light: #ffffff;
-  --shadow-dark: #c1ccd5;
-  --border: #c7d2dc;
-  --text: #1c2b35;
-  --text-muted: #52636e;
-  --accent: #087f68;
+  /* Qatlam chuqurligi - Operatsion panel */
+  --canvas: #f8fafc;
+  --surface: #ffffff;
+  --surface-raised: #f1f5f9;
+  --modal: #ffffff;
+  --border: #e2e8f0;
+  --border-muted: #edf2f7;
+
+  /* Tipografiya */
+  --text: #0f172a;
+  --text-muted: #64748b;
+
+  /* Brend aksent yashil */
+  --accent: var(--accent);
   --accent-hover: #066a57;
-  --accent-soft: #d7eee7;
-  --focus-ring: #005b4a;
-  --success: #176345;
-  --success-surface: #dcefe5;
-  --warning: #76500a;
-  --warning-surface: #f3e8cc;
-  --danger: #a52e3b;
-  --danger-surface: #f4dfe0;
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
-  --radius-pill: 999px;
-  --elev-1: 3px 3px 7px var(--shadow-dark), -3px -3px 7px var(--shadow-light);
-  --elev-2: 5px 5px 11px var(--shadow-dark), -5px -5px 11px var(--shadow-light);
-  --elev-3: 8px 8px 18px var(--shadow-dark), -8px -8px 18px var(--shadow-light);
-  --inset-1: inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light);
-  --inset-2: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+  --accent-soft: #e6f6f1;
+  --focus-ring: var(--accent);
+
+  /* Semantik holat tokenlari */
+  --status-ok: var(--accent);
+  --status-warn: #b7791f;
+  --status-bad: var(--status-bad);
+  --status-info: #0284c7;
+
+  --success: var(--status-ok);
+  --success-surface: color-mix(in srgb, var(--status-ok) 12%, transparent);
+  --warning: var(--status-warn);
+  --warning-surface: color-mix(in srgb, var(--status-warn) 12%, transparent);
+  --danger: var(--status-bad);
+  --danger-surface: color-mix(in srgb, var(--status-bad) 12%, transparent);
+  --info: var(--status-info);
+  --info-surface: color-mix(in srgb, var(--status-info) 12%, transparent);
+
+  /* Radiuslar (8-12px) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+
+  /* Tekis operatsion panel soyalari (neumorfizm olib tashlandi) */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+
+  /* Eski tokenlar mosligi uchun */
+  --elev-1: var(--shadow-sm);
+  --elev-2: var(--shadow-md);
+  --elev-3: var(--shadow-lg);
+  --inset-1: none;
+  --inset-2: none;
+  --shadow-light: transparent;
+  --shadow-dark: transparent;
+
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -43,29 +73,49 @@
 
 .dark {
   color-scheme: dark;
-  --surface: #202b2b;
-  --surface-raised: #202b2b;
+  /* Qatlam chuqurligi: ochroq fon orqali (canvas -> surface -> modal) */
   --canvas: #1a2424;
-  --shadow-light: #2e3b3a;
-  --shadow-dark: #131b1c;
-  --border: #3b4a48;
+  --surface: #202b2b;
+  --surface-raised: #273433;
+  --modal: #273433;
+  --border: #2e3e3c;
+  --border-muted: #243130;
+
+  /* Tipografiya */
   --text: #edf4f1;
-  --text-muted: #b6c4bf;
+  --text-muted: #94a3a0;
+
+  /* Brend aksent yashil (ochroq, kontrast >= 4.5:1) */
   --accent: #63d9b8;
   --accent-hover: #8be8cd;
   --accent-soft: #24463e;
-  --focus-ring: #a2f6dc;
-  --success: #91e2b3;
-  --success-surface: #244437;
-  --warning: #ffd17a;
-  --warning-surface: #493b22;
-  --danger: #ff9a9e;
-  --danger-surface: #482b30;
-  --elev-1: 3px 3px 7px var(--shadow-dark), -3px -3px 7px var(--shadow-light);
-  --elev-2: 5px 5px 11px var(--shadow-dark), -5px -5px 11px var(--shadow-light);
-  --elev-3: 8px 8px 18px var(--shadow-dark), -8px -8px 18px var(--shadow-light);
-  --inset-1: inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light);
-  --inset-2: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+  --focus-ring: #63d9b8;
+
+  /* Semantik holat tokenlari */
+  --status-ok: #91e2b3;
+  --status-warn: #ffd17a;
+  --status-bad: #ff9a9e;
+  --status-info: #7dd3fc;
+
+  --success: var(--status-ok);
+  --success-surface: color-mix(in srgb, var(--status-ok) 16%, transparent);
+  --warning: var(--status-warn);
+  --warning-surface: color-mix(in srgb, var(--status-warn) 16%, transparent);
+  --danger: var(--status-bad);
+  --danger-surface: color-mix(in srgb, var(--status-bad) 16%, transparent);
+  --info: var(--status-info);
+  --info-surface: color-mix(in srgb, var(--status-info) 16%, transparent);
+
+  /* Tekis operatsion panel soyalari */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
+
+  --elev-1: var(--shadow-sm);
+  --elev-2: var(--shadow-md);
+  --elev-3: var(--shadow-lg);
+  --inset-1: none;
+  --inset-2: none;
 }
 
 body {
@@ -80,11 +130,53 @@ html {
   accent-color: var(--accent);
 }
 
+/* Tipografiya o'lchamlari va tartibi */
+h1, .h1 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+h2, .h2 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+h3, .h3 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+small, .text-sm, .caption, .helper-text {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Ustunlar tekis turishi uchun raqamlar tabular-nums */
+table,
+th,
+td,
+.tabular-nums,
+[data-numeric],
+.price,
+.amount,
+.finance-amount,
+.order-total,
+.stat-value,
+.stat-number,
+.quantity,
+.metric-value {
+  font-variant-numeric: tabular-nums;
+}
+
 button,
 input,
 select,
 textarea {
   font: inherit;
+  font-size: 14px;
 }
 
 button,
@@ -93,36 +185,57 @@ a {
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+button:hover:not(:disabled) {
   background: var(--surface-raised);
+  border-color: var(--accent);
+}
+
+button:active:not(:disabled) {
+  box-shadow: none;
+  transform: translateY(1px);
 }
 
 input,
 select,
 textarea {
-  border-color: var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   color: var(--text);
-  background-color: var(--surface-raised);
-  box-shadow: var(--inset-1);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-button:active:not(:disabled) {
-  box-shadow: var(--inset-1);
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 3px solid var(--focus-ring);
+a:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
+/* Jadvallar */
 table {
+  width: 100%;
+  border-collapse: collapse;
   border-color: var(--border);
 }
 
@@ -131,9 +244,85 @@ td {
   border-color: var(--border);
 }
 
+th {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Do'kon va Haydovchi panellarida tez va qulay 44px+ amallar */
 .shop-app-shell button,
-.driver-panel button {
+.driver-panel button,
+.driver-action-btn,
+.shop-primary-button,
+.shop-checkout-btn {
   min-height: 44px;
+  padding: 10px 16px;
+}
+
+/* Holat belgilari (Yarim shaffof fon usuli) */
+.dispatcher-status-new,
+.status-new,
+.status-pending {
+  color: var(--status-warn);
+  background: color-mix(in srgb, var(--status-warn) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-warn) 30%, transparent);
+}
+
+.dispatcher-status-ready,
+.dispatcher-status-assigned,
+.status-assigned,
+.status-processing {
+  color: var(--status-info);
+  background: color-mix(in srgb, var(--status-info) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-info) 30%, transparent);
+}
+
+.dispatcher-status-delivered,
+.status-delivered,
+.status-completed,
+.status-paid {
+  color: var(--status-ok);
+  background: color-mix(in srgb, var(--status-ok) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-ok) 30%, transparent);
+}
+
+.dispatcher-status-cancelled,
+.status-cancelled,
+.status-failed {
+  color: var(--status-bad);
+  background: color-mix(in srgb, var(--status-bad) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-bad) 30%, transparent);
+}
+
+/* Leaflet xaritasi - dark rejim filtri */
+.dark .leaflet-tile {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9);
+}
+
+.dark .leaflet-container {
+  background: var(--canvas);
+}
+
+.dark .leaflet-popup-content-wrapper,
+.dark .leaflet-popup-tip {
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+/* Mahsulot rasmlari dark rejimda yopishib qolmasligi uchun ramka */
+.dark img,
+.dark .shop-product-thumb,
+.dark .product-image,
+.dark .catalog-item-image {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {

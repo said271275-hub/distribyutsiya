@@ -162,6 +162,20 @@ function DispatcherPanel() {
   const location = useLocation()
   const [logoutError, setLogoutError] = useState('')
 
+  const companyQuery = useQuery({
+    queryKey: ['company-me'],
+    queryFn: async () => (await api.get<CompanyMe>('/v1/company/me/')).data,
+    enabled: Boolean(user && user.role === 'company_admin'),
+    staleTime: 30000,
+  })
+
+  const dashboardQuery = useQuery({
+    queryKey: ['dispatcher-dashboard'],
+    queryFn: async () => (await api.get<DashboardData>('/v1/admin/dashboard/')).data,
+    enabled: Boolean(user && user.role === 'company_admin'),
+    staleTime: 30000,
+  })
+
   if (!user || user.role !== 'company_admin') {
     return <Navigate to="/" replace />
   }
@@ -175,18 +189,6 @@ function DispatcherPanel() {
       setLogoutError('Tizimdan chiqib bo‘lmadi. Qayta urinib ko‘ring.')
     }
   }
-
-  const companyQuery = useQuery({
-    queryKey: ['company-me'],
-    queryFn: async () => (await api.get<CompanyMe>('/v1/company/me/')).data,
-    staleTime: 30000,
-  })
-
-  const dashboardQuery = useQuery({
-    queryKey: ['dispatcher-dashboard'],
-    queryFn: async () => (await api.get<DashboardData>('/v1/admin/dashboard/')).data,
-    staleTime: 30000,
-  })
 
   const pageTitle = location.pathname.startsWith('/company/orders')
     ? 'Buyurtmalar'
