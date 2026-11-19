@@ -1361,3 +1361,222 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* ========================================================
+   CUSTOM DATE PICKER (OPERATSION PANEL KALENDARI)
+   ======================================================== */
+.dispatcher-date-picker-wrap {
+  position: relative;
+  display: inline-block;
+  min-width: 170px;
+}
+
+.dispatcher-date-input-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--dispatcher-line);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--dispatcher-text);
+  background-color: var(--dispatcher-surface);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dispatcher-date-input-btn:hover,
+.dispatcher-date-input-btn.is-focused {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.dispatcher-date-input-icon {
+  color: var(--dispatcher-muted);
+  flex-shrink: 0;
+}
+
+.dispatcher-date-input-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.dispatcher-date-input-text.is-placeholder {
+  color: var(--dispatcher-muted);
+}
+
+.dispatcher-date-input-clear {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--dispatcher-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dispatcher-date-input-clear:hover {
+  color: var(--status-bad);
+  background-color: color-mix(in srgb, var(--status-bad) 15%, transparent);
+}
+
+/* Kalendar Popover */
+.dispatcher-calendar-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  width: 265px;
+  padding: 14px;
+  border: 1px solid var(--dispatcher-line);
+  border-radius: var(--radius-md, 10px);
+  background-color: var(--dispatcher-surface);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  animation: dispatcher-calendar-fade 0.15s ease-out;
+}
+
+@keyframes dispatcher-calendar-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dispatcher-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.dispatcher-calendar-title {
+  color: var(--dispatcher-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dispatcher-calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dispatcher-calendar-nav-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--dispatcher-line);
+  border-radius: var(--radius-sm, 5px);
+  color: var(--dispatcher-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dispatcher-calendar-nav-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.dispatcher-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.dispatcher-calendar-weekday {
+  color: var(--dispatcher-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.dispatcher-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.dispatcher-calendar-day {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 5px);
+  color: var(--dispatcher-text);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.dispatcher-calendar-day:hover {
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.dispatcher-calendar-day.is-today {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.dispatcher-calendar-day.is-selected {
+  background-color: var(--accent) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.dark .dispatcher-calendar-day.is-selected {
+  color: #121c19 !important;
+}
+
+.dispatcher-calendar-day.is-outside {
+  color: var(--dispatcher-muted);
+  opacity: 0.35;
+}
+
+.dispatcher-calendar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dispatcher-line);
+}
+
+.dispatcher-calendar-action-btn {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dispatcher-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dispatcher-calendar-action-btn:hover {
+  color: var(--dispatcher-text);
+  background-color: color-mix(in srgb, var(--dispatcher-text) 8%, transparent);
+}
+
+.dispatcher-calendar-action-btn.is-accent {
+  color: var(--accent);
+}
+
+.dispatcher-calendar-action-btn.is-accent:hover {
+  background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+}

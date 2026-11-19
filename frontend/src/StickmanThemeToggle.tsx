@@ -5,72 +5,64 @@ interface StickmanThemeToggleProps {
   className?: string
 }
 
+type StickmanState = 'day' | 'to_night' | 'night' | 'night_peek' | 'to_day'
+
 export const StickmanThemeToggle: React.FC<StickmanThemeToggleProps> = ({ className = '' }) => {
   const { isDark, toggleTheme } = useTheme()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
-  // Holatlar:
-  // 'day_idle': kunduzi erkin turadi
-  // 'jump_into_hole': teshikka sakrab tushadi va tun bo'ladi
-  // 'night_hidden': chuqur ichida yotadi
-  // 'night_peek': har 5 sekundda chuqurdan boshini chiqarib sakrab poylaydi va qaytib tushadi
-  // 'jump_out_to_sun': chuqurdan sakrab chiqib quyoshcha oldiga boradi va yo'q bo'lib/singib ketadi
-  const stateRef = useRef<'day_idle' | 'jump_into_hole' | 'night_hidden' | 'night_peek' | 'jump_out_to_sun'>(
-    isDark ? 'night_hidden' : 'day_idle'
-  )
-  const animProgressRef = useRef(0)
-  const prevIsDarkRef = useRef(isDark)
+  const isDarkRef = useRef(isDark)
+  isDarkRef.current = isDark
+
+  const stateRef = useRef<StickmanState>(isDark ? 'night' : 'day')
+  const progressRef = useRef(0)
+  const isAnimatingRef = useRef(false)
   const isHoveredRef = useRef(false)
   const [isHovered, setIsHovered] = useState(false)
 
-  // Tunda har 5 sekundda poylab (peek) turish taymeri
+  // Tashqi theme o'zgarishini kuzatish
+  const prevIsDark = useRef(isDark)
   useEffect(() => {
-    let peekTimer: ReturnType<typeof setTimeout>
-    if (isDark) {
-      const schedulePeek = () => {
-        peekTimer = setTimeout(() => {
-          if (stateRef.current === 'night_hidden') {
-            stateRef.current = 'night_peek'
-            animProgressRef.current = 0
-          }
-          schedulePeek()
-        }, 5000)
+    if (prevIsDark.current !== isDark) {
+      prevIsDark.current = isDark
+      if (!isAnimatingRef.current) {
+        stateRef.current = isDark ? 'night' : 'day'
+        progressRef.current = 0
       }
-      schedulePeek()
     }
-    return () => clearTimeout(peekTimer)
   }, [isDark])
 
-  // Foydalanuvchi bosganda holatni o'zgartirish
+  // Tunda har 5 sekundda poylab (peek) turish
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (isDarkRef.current && stateRef.current === 'night' && !isAnimatingRef.current) {
+        stateRef.current = 'night_peek'
+        progressRef.current = 0
+      }
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Bosilganda xavfsiz va aniq almashtirish
   const handleToggle = () => {
-    if (!isDark) {
-      // Kunduzdan tunga: bolacha teshikka sakrab tushadi, so'ng tun bo'ladi
-      stateRef.current = 'jump_into_hole'
-      animProgressRef.current = 0
-      setTimeout(() => {
-        toggleTheme()
-      }, 350)
+    if (isAnimatingRef.current) return // animatsiya ketayotganda qayta bosishni bloklash
+
+    if (!isDarkRef.current) {
+      // Kunduzdan tunga: bolacha teshikka sakraydi
+      isAnimatingRef.current = true
+      stateRef.current = 'to_night'
+      progressRef.current = 0
     } else {
-      // Tundan kunduzga: qaytib chiqib quyoshcha oldiga boradi
-      stateRef.current = 'jump_out_to_sun'
-      animProgressRef.current = 0
+      // Tundan kunduzga: bolacha chuqurdan sakrab chiqadi va quyosh sari boradi
+      isAnimatingRef.current = true
+      stateRef.current = 'to_day'
+      progressRef.current = 0
+      // Quyosh darhol yoki sakrash boshida chiqadi
       toggleTheme()
     }
   }
 
-  // Tashqi theme o'zgarishini kuzatish (agar boshqa joydan o'zgarsa)
-  useEffect(() => {
-    if (prevIsDarkRef.current !== isDark) {
-      if (isDark && stateRef.current !== 'jump_into_hole') {
-        stateRef.current = 'night_hidden'
-      } else if (!isDark && stateRef.current !== 'jump_out_to_sun') {
-        stateRef.current = 'day_idle'
-      }
-      prevIsDarkRef.current = isDark
-    }
-  }, [isDark])
-
-  // Canvas render loop (60 FPS)
+  // Yagona uzluksiz 60FPS render loop
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -82,17 +74,18 @@ export const StickmanThemeToggle: React.FC<StickmanThemeToggleProps> = ({ classN
     let sunRaysAngle = 0
 
     const render = (time: number) => {
-      const dt = Math.min((time - lastTime) / 1000, 0.1)
+      const dt = Math.min((time - lastTime) / 1000, 0.05)
       lastTime = time
 
       const w = 116
       const h = 36
       const groundY = 26
-      const holeX = 90
+      const holeX = 92
       const sunX = 20
       const sunY = h / 2
+      const currentDark = isDarkRef.current
 
-      // HiDPI / Retina moslashuv
+      // Retina / HiDPI
       const dpr = window.devicePixelRatio || 1
       if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
         canvas.width = w * dpr
@@ -103,36 +96,35 @@ export const StickmanThemeToggle: React.FC<StickmanThemeToggleProps> = ({ classN
       ctx.scale(dpr, dpr)
       ctx.clearRect(0, 0, w, h)
 
-      // 1. Kapsula (Toggle fon va chegara)
+      // 1. Kapsula (Toggle fon)
       ctx.beginPath()
       ctx.roundRect(1, 1, w - 2, h - 2, (h - 2) / 2)
-      ctx.fillStyle = isDark ? '#1a2424' : '#f8fafc'
+      ctx.fillStyle = currentDark ? '#1a2424' : '#f8fafc'
       ctx.fill()
       ctx.lineWidth = 1.2
       ctx.strokeStyle = isHoveredRef.current
-        ? (isDark ? '#63d9b8' : '#087f68')
-        : (isDark ? '#2e3e3c' : '#cbd5e1')
+        ? (currentDark ? '#63d9b8' : '#087f68')
+        : (currentDark ? '#2e3e3c' : '#cbd5e1')
       ctx.stroke()
 
-      // 2. Teshik (Hole / Chuqur)
+      // 2. Teshik (Hole)
       ctx.save()
       ctx.beginPath()
       ctx.ellipse(holeX, groundY + 1.5, 11, 4, 0, 0, Math.PI * 2)
-      ctx.fillStyle = isDark ? '#0d1312' : '#94a3b8'
+      ctx.fillStyle = currentDark ? '#0d1312' : '#94a3b8'
       ctx.fill()
       ctx.lineWidth = 1
-      ctx.strokeStyle = isDark ? '#243130' : '#cbd5e1'
+      ctx.strokeStyle = currentDark ? '#243130' : '#cbd5e1'
       ctx.stroke()
       ctx.restore()
 
       // 3. Quyosh / Oy
-      if (!isDark) {
-        // Quyoshcha (☀️)
+      if (!currentDark) {
+        // Quyoshcha
         sunRaysAngle += dt * 1.5
         ctx.save()
         ctx.translate(sunX, sunY)
 
-        // Nurlar
         ctx.strokeStyle = '#f59e0b'
         ctx.lineWidth = 1.6
         ctx.lineCap = 'round'
@@ -148,14 +140,13 @@ export const StickmanThemeToggle: React.FC<StickmanThemeToggleProps> = ({ classN
           ctx.stroke()
         }
 
-        // Quyosh diski
         ctx.beginPath()
         ctx.arc(0, 0, 6.2, 0, Math.PI * 2)
         ctx.fillStyle = '#f59e0b'
         ctx.fill()
         ctx.restore()
       } else {
-        // Oy (🌙)
+        // Oy
         ctx.save()
         ctx.translate(sunX, sunY)
         ctx.fillStyle = '#38bdf8'
@@ -165,7 +156,6 @@ export const StickmanThemeToggle: React.FC<StickmanThemeToggleProps> = ({ classN
         ctx.closePath()
         ctx.fill()
 
-        // Yulduzchalar
         ctx.fillStyle = '#7dd3fc'
         ctx.beginPath()
         ctx.arc(8, -5, 1, 0, Math.PI * 2)
@@ -176,31 +166,10 @@ export const StickmanThemeToggle: React.FC<StickmanThemeToggleProps> = ({ classN
         ctx.restore()
       }
 
-      // 4. Holat va progress
+      // 4. Holat mashinasi va progress
       const state = stateRef.current
+      progressRef.current += dt
 
-      if (state === 'jump_into_hole') {
-        animProgressRef.current += dt * 2.2
-        if (animProgressRef.current >= 1) {
-          animProgressRef.current = 1
-          stateRef.current = 'night_hidden'
-        }
-      } else if (state === 'night_peek') {
-        animProgressRef.current += dt * 1.4
-        if (animProgressRef.current >= 1) {
-          animProgressRef.current = 0
-          stateRef.current = 'night_hidden'
-        }
-      } else if (state === 'jump_out_to_sun') {
-        animProgressRef.current += dt * 1.2
-        if (animProgressRef.current >= 1) {
-          animProgressRef.current = 1
-          stateRef.current = 'day_idle'
-        }
-      }
-
-      // 5. Bolakay (Stickman) koordinatalari
-      const p = animProgressRef.current
       let stickmanX = 54
       let stickmanY = groundY
       let stickmanScale = 1
@@ -209,75 +178,110 @@ export const StickmanThemeToggle: React.FC<StickmanThemeToggleProps> = ({ classN
       let legSpread = 0.2
       let isVisible = true
 
-      if (state === 'day_idle') {
+      if (state === 'day') {
         stickmanX = 54
         stickmanY = groundY
         stickmanScale = 1
         stickmanOpacity = 1
-        armAngle = Math.sin(time * 0.003) * 0.2
+        armAngle = Math.sin(time * 0.003) * 0.15
         legSpread = 0.2 + Math.sin(time * 0.002) * 0.05
-      } else if (state === 'jump_into_hole') {
-        // Teshikka sakrab tushish
+      } else if (state === 'to_night') {
+        // 0.5 soniyada teshikka sakrab tushadi
+        const duration = 0.55
+        const p = Math.min(progressRef.current / duration, 1)
+
         stickmanX = 54 + (holeX - 54) * p
-        const jumpArc = Math.sin(p * Math.PI) * 14
-        stickmanY = groundY - jumpArc + p * 4
-        stickmanScale = Math.max(0, 1 - p * 0.85)
+        const jumpArc = Math.sin(p * Math.PI) * 16
+        stickmanY = groundY - jumpArc + p * 3.5
+        stickmanScale = Math.max(0, 1 - p * 0.8)
         stickmanOpacity = Math.max(0, 1 - p * 0.95)
         armAngle = p * Math.PI * 1.5
         legSpread = 0.6
-      } else if (state === 'night_hidden') {
+
+        if (p >= 1) {
+          stateRef.current = 'night'
+          isAnimatingRef.current = false
+          progressRef.current = 0
+          toggleTheme() // Teshikka tushib bo'lgach tun bo'ladi
+        }
+      } else if (state === 'night') {
         isVisible = false
       } else if (state === 'night_peek') {
-        // Tunda har 5 sekundda poylash: boshini chiqarib sakraydi va chuqurga qaytadi
+        // Teshikdan sakrab mo'ralaydi (0.7 soniya)
+        const duration = 0.7
+        const p = Math.min(progressRef.current / duration, 1)
         isVisible = true
+
         const peekArc = Math.sin(p * Math.PI)
         stickmanX = holeX
-        // Bosh va ko'zlari teshikdan chiqadi
-        stickmanY = groundY + 4 - peekArc * 11
+        stickmanY = groundY + 4 - peekArc * 12
         stickmanScale = 0.85
         stickmanOpacity = peekArc
         armAngle = Math.sin(p * Math.PI * 2) * 0.4
         legSpread = 0.1
-      } else if (state === 'jump_out_to_sun') {
-        // Teshikdan sakrab chiqib quyoshcha tomon yuguradi va yo'q bo'lib/singib ketadi
+
+        if (p >= 1) {
+          stateRef.current = 'night'
+          progressRef.current = 0
+        }
+      } else if (state === 'to_day') {
+        // Chuqurdan chiqib quyoshcha tomon yuguradi va singib ketadi (1.4 soniya)
+        const totalDuration = 1.3
+        const p = Math.min(progressRef.current / totalDuration, 1)
         isVisible = true
+
         if (p < 0.35) {
-          // Chuqurdan yuqoriga sakrab chiqish
+          // Chuqurdan sakrab chiqish (0 -> 0.35)
           const jumpP = p / 0.35
-          stickmanX = holeX - (holeX - 60) * jumpP
-          stickmanY = groundY - Math.sin(jumpP * Math.PI) * 14
+          stickmanX = holeX - (holeX - 62) * jumpP
+          stickmanY = groundY - Math.sin(jumpP * Math.PI) * 15
           stickmanScale = Math.min(1, 0.4 + jumpP * 0.6)
           stickmanOpacity = Math.min(1, jumpP * 2)
-          armAngle = -0.5
+          armAngle = -0.4
           legSpread = 0.4
-        } else {
-          // Quyoshcha tomon yugurib borish va yo'q bo'lib ketish (fade out / singib ketish)
-          const runP = (p - 0.35) / 0.65
-          stickmanX = 60 - (60 - (sunX + 6)) * runP
+        } else if (p < 0.75) {
+          // Quyoshcha tomon yugurish (0.35 -> 0.75)
+          const runP = (p - 0.35) / 0.4
+          stickmanX = 62 - (62 - (sunX + 6)) * runP
           stickmanY = groundY
-          armAngle = Math.sin(runP * Math.PI * 8) * 0.8
-          legSpread = Math.sin(runP * Math.PI * 8) * 0.6
-
-          if (runP > 0.7) {
-            // Quyoshga yetganda asta-sekin yo'q bo'lib ketadi
-            const fade = (runP - 0.7) / 0.3
-            stickmanOpacity = Math.max(0, 1 - fade)
-            stickmanScale = Math.max(0, 1 - fade * 0.5)
+          armAngle = Math.sin(runP * Math.PI * 8) * 0.7
+          legSpread = Math.sin(runP * Math.PI * 8) * 0.5
+          stickmanOpacity = 1
+          stickmanScale = 1
+        } else {
+          // Quyoshcha oldida yo'q bo'lib/singib ketish va markazda paydo bo'lish (0.75 -> 1.0)
+          const fadeP = (p - 0.75) / 0.25
+          if (fadeP < 0.5) {
+            // Quyoshga singib yo'q bo'ladi
+            stickmanX = sunX + 6
+            stickmanY = groundY
+            stickmanOpacity = Math.max(0, 1 - fadeP * 2)
+            stickmanScale = Math.max(0, 1 - fadeP)
           } else {
-            stickmanOpacity = 1
-            stickmanScale = 1
+            // Kunduzgi joyida (x=54) mayin paydo bo'ladi
+            const appearP = (fadeP - 0.5) / 0.5
+            stickmanX = 54
+            stickmanY = groundY
+            stickmanOpacity = appearP
+            stickmanScale = 0.5 + appearP * 0.5
           }
+        }
+
+        if (p >= 1) {
+          stateRef.current = 'day'
+          isAnimatingRef.current = false
+          progressRef.current = 0
         }
       }
 
-      // Stickmanni chizish
+      // 5. Stickmanni chizish
       if (isVisible && stickmanOpacity > 0.02) {
         ctx.save()
-        ctx.globalAlpha = stickmanOpacity
+        ctx.globalAlpha = Math.min(1, Math.max(0, stickmanOpacity))
         ctx.translate(stickmanX, stickmanY)
         ctx.scale(stickmanScale, stickmanScale)
 
-        const strokeColor = isDark ? '#ffffff' : '#0f172a'
+        const strokeColor = currentDark ? '#ffffff' : '#0f172a'
         ctx.strokeStyle = strokeColor
         ctx.fillStyle = strokeColor
         ctx.lineWidth = 1.3
@@ -320,7 +324,7 @@ export const StickmanThemeToggle: React.FC<StickmanThemeToggleProps> = ({ classN
 
     animId = requestAnimationFrame(render)
     return () => cancelAnimationFrame(animId)
-  }, [isDark])
+  }, []) // Yagona uzluksiz loop
 
   return (
     <button

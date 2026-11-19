@@ -12,7 +12,7 @@ import {
   X,
   Package,
 } from 'lucide-react'
-import api, { apiErrorMessage } from './api'
+import api, { apiErrorMessage, formatMediaUrl } from './api'
 
 export interface MyCompanySubscription {
   id: number
@@ -26,6 +26,15 @@ export interface MyCompanySubscription {
   requested_at: string
   decided_at: string | null
   reject_reason?: string | null
+}
+
+function CompanyLogoImage({ src, name }: { src: string | null; name: string }) {
+  const [failed, setFailed] = useState(false)
+  const resolved = formatMediaUrl(src)
+  if (!resolved || failed) {
+    return <Building2 size={26} strokeWidth={1.5} />
+  }
+  return <img src={resolved} alt={name} onError={() => setFailed(true)} loading="lazy" />
 }
 
 export default function ShopMyCompaniesPage() {
@@ -133,11 +142,7 @@ export default function ShopMyCompaniesPage() {
             <article key={sub.id} className="shop-directory-card">
               <div className="shop-directory-card-header">
                 <div className="shop-directory-logo">
-                  {sub.company_logo ? (
-                    <img src={sub.company_logo} alt={sub.company_name} />
-                  ) : (
-                    <Building2 size={26} strokeWidth={1.5} />
-                  )}
+                  <CompanyLogoImage src={sub.company_logo} name={sub.company_name} />
                 </div>
                 <div className="shop-directory-header-meta">
                   <h3>{sub.company_name}</h3>

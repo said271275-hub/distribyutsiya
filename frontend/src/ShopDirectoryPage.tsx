@@ -12,7 +12,7 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react'
-import api, { apiErrorMessage } from './api'
+import api, { apiErrorMessage, formatMediaUrl } from './api'
 
 export interface DirectoryCompany {
   id: number
@@ -48,6 +48,15 @@ const TASHKENT_DISTRICTS = [
   'Yashnobod',
   'Yunusobod',
 ]
+
+function DirectoryCompanyLogo({ src, name }: { src: string | null; name: string }) {
+  const [failed, setFailed] = useState(false)
+  const resolved = formatMediaUrl(src)
+  if (!resolved || failed) {
+    return <Building2 size={26} strokeWidth={1.5} />
+  }
+  return <img src={resolved} alt={name} onError={() => setFailed(true)} loading="lazy" />
+}
 
 export default function ShopDirectoryPage() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -209,11 +218,7 @@ export default function ShopDirectoryPage() {
               <article key={company.id} className="shop-directory-card">
                 <div className="shop-directory-card-header">
                   <div className="shop-directory-logo">
-                    {company.logo ? (
-                      <img src={company.logo} alt={company.name} />
-                    ) : (
-                      <Building2 size={26} strokeWidth={1.5} />
-                    )}
+                    <DirectoryCompanyLogo src={company.logo} name={company.name} />
                   </div>
                   <div className="shop-directory-header-meta">
                     <h3>{company.name}</h3>

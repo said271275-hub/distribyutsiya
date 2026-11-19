@@ -51,6 +51,7 @@ import {
 import './DispatcherPanel.css'
 import './DispatcherPlanning.css'
 import './DispatcherOrders.css'
+import { DispatcherDatePicker } from './DispatcherDatePicker'
 
 const TripPlanningPage = lazy(() => import('./TripPlanningPage'))
 const PickingListPage = lazy(() => import('./PickingListPage'))
@@ -560,10 +561,14 @@ function OrdersPage() {
       <PageHeading title="Buyurtmalar" description="Kompaniyangiz buyurtmalarini sana, holat va qidiruv bo‘yicha ko‘ring." />
       <section className="dispatcher-card dispatcher-orders-card">
         <div className="dispatcher-orders-toolbar">
-          <label className="dispatcher-filter">
+          <div className="dispatcher-filter">
             <span>Sana</span>
-            <input type="date" value={filters.date} onChange={(event) => updateFilter('date', event.target.value)} />
-          </label>
+            <DispatcherDatePicker
+              value={filters.date}
+              onChange={(newDate) => updateFilter('date', newDate)}
+              placeholder="Sanani tanlang"
+            />
+          </div>
           <label className="dispatcher-filter">
             <span>Holat</span>
             <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value as OrderStatus | 'all')}>

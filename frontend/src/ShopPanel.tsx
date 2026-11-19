@@ -28,7 +28,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
-import api, { apiErrorMessage } from './api'
+import api, { apiErrorMessage, formatMediaUrl } from './api'
 import {
   financeEntryLabel,
   formatFinanceBalance,
@@ -367,9 +367,23 @@ function CatalogPreview({ t }: { t: Copy }) {
 }
 
 function ProductCard({ product, onAdd, compact = false }: { product: CatalogProduct; onAdd: () => void; compact?: boolean }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const resolvedImg = formatMediaUrl(product.image_url)
+
   return (
     <article className={`shop-product-card ${compact ? 'shop-product-compact' : ''}`}>
-      <div className="shop-product-image">{product.image_url ? <img src={product.image_url} alt={product.name} /> : <Package size={32} strokeWidth={1.4} />}</div>
+      <div className="shop-product-image">
+        {resolvedImg && !imgFailed ? (
+          <img
+            src={resolvedImg}
+            alt={product.name}
+            onError={() => setImgFailed(true)}
+            loading="lazy"
+          />
+        ) : (
+          <Package size={32} strokeWidth={1.4} />
+        )}
+      </div>
       <div className="shop-product-company-badge">
         <Building2 size={12} />
         <span>{product.company_name}</span>

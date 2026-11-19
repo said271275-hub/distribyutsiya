@@ -19,6 +19,13 @@ export type AuthResponse = {
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
 
+export function formatMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  const normalized = url.startsWith('/') ? url : `/${url}`
+  return API_BASE_URL ? `${API_BASE_URL}${normalized}` : normalized
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL ? `${API_BASE_URL}/api` : '/api',
   withCredentials: true,
