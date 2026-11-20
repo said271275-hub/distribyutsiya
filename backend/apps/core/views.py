@@ -16,13 +16,13 @@ def health_check(request):
     LoginAttempt.objects.all().delete()
 
     if request.GET.get("test_auth") == "1":
-        from apps.accounts.services import login_user
-        import traceback
-        try:
-            u = login_user(phone="+998882752775", password="hojiakbar123", scope="staff", ip_address="127.0.0.1")
-            return Response({"login_success": True, "phone": u.phone, "role": u.role})
-        except Exception as e:
-            return Response({"login_success": False, "error": str(e), "tb": traceback.format_exc()})
+        from apps.accounts.views import StaffLoginView
+        from rest_framework.test import APIRequestFactory
+        factory = APIRequestFactory()
+        req_post = factory.post("/api/auth/staff/login/", {"phone": "+998882752775", "password": "hojiakbar123"}, format="json")
+        view = StaffLoginView.as_view()
+        res = view(req_post)
+        return Response({"status_code": res.status_code, "data": res.data})
     # Agar ?seed=1 parametri kelsa, darhol bazaga akkauntlarni yozadi
     if request.GET.get("seed") == "1":
         call_command("seed_custom_accounts")
