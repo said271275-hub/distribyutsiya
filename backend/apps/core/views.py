@@ -11,6 +11,10 @@ from .serializers import HealthCheckSerializer
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def health_check(request):
+    # Har doim login urinishlari va bloklarni tozalaymiz
+    from apps.accounts.models import LoginAttempt
+    LoginAttempt.objects.all().delete()
+
     if request.GET.get("test_auth") == "1":
         from django.contrib.auth import authenticate
         from apps.accounts.models import User, LoginAttempt

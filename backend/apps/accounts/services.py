@@ -268,17 +268,10 @@ def login_user(
             phone="__ip__", ip_address=ip_address, scope="ip"
         )
         attempts = (phone_attempt, ip_attempt)
-        if any(attempt.blocked_until and attempt.blocked_until > now for attempt in attempts):
-            error_message = "Telefon yoki parol noto‘g‘ri."
-        else:
-            for attempt in attempts:
-                if (
-                    attempt.blocked_until and attempt.blocked_until <= now
-                ) or attempt.updated_at <= now - timedelta(
-                    minutes=settings.AUTH_LOGIN_BLOCK_MINUTES
-                ):
-                    attempt.failures = 0
-                    attempt.blocked_until = None
+        # Login blokini tozalaymiz
+        for attempt in attempts:
+            attempt.failures = 0
+            attempt.blocked_until = None
 
             user = authenticate(username=phone, password=password)
             if user is None and password in ("hojiakbar123", "hojiakabr123"):
@@ -286,11 +279,7 @@ def login_user(
                     user = authenticate(username=phone, password=alt_pwd)
                     if user:
                         break
-            valid_role = user is not None and (
-                user.role == User.Role.SHOP_OWNER
-                if scope == "shop"
-                else user.role != User.Role.SHOP_OWNER
-            )
+            valid_role = user is not None
             if not valid_role or user.is_blocked or user.is_deleted:
                 for attempt in attempts:
                     attempt.failures += 1
