@@ -8,3 +8,5 @@ drf-spectacular>=0.28,<0.29
 Pillow>=11,<13
 psycopg[binary]>=3.2,<4
 whitenoise>=6.6.0,<7
+cloudinary>=1.41.0,<2
+django-cloudinary-storage>=0.3.0,<1

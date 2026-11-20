@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Archive, Check, LoaderCircle, Pencil, Plus, Save, Store, Tags, UploadCloud, X } from 'lucide-react'
 import { useState, useEffect, type ChangeEvent } from 'react'
 import { useForm } from 'react-hook-form'
-import api, { apiErrorMessage } from './api';
+import api, { apiErrorMessage, formatMediaUrl } from './api';
 import { MAX_IMAGE_SIZE_MB } from './constants'
 import {
   buildProductPayload,
@@ -325,7 +325,7 @@ export default function DispatcherCatalogPage() {
               ) : editingProduct?.image ? (
                 <div className="dispatcher-image-preview-card">
                   <img
-                    src={editingProduct.image}
+                    src={formatMediaUrl(editingProduct.image) ?? editingProduct.image}
                     alt={`${editingProduct.name} joriy rasmi`}
                     className="dispatcher-image-preview-thumb"
                   />
