@@ -16,27 +16,13 @@ def health_check(request):
     LoginAttempt.objects.all().delete()
 
     if request.GET.get("test_auth") == "1":
-        from django.contrib.auth import authenticate
-        from apps.accounts.models import User, LoginAttempt
-        # Agar blocklangan bo'lsa tozalaymiz
-        LoginAttempt.objects.all().delete()
-        u = User.objects.filter(phone="+998882752775").first()
-        if u:
-            u.set_password("hojiakbar123")
-            u.is_active = True
-            u.is_blocked = False
-            u.is_deleted = False
-            u.must_change_password = False
-            u.save()
-        auth_res = authenticate(username="+998882752775", password="hojiakbar123")
-        chk = u.check_password("hojiakbar123") if u else False
-        return Response({
-            "user_found": bool(u),
-            "user_role": u.role if u else None,
-            "check_pwd": chk,
-            "auth_res": str(auth_res),
-            "is_active": u.is_active if u else None,
-        })
+        from apps.accounts.services import login_user
+        import traceback
+        try:
+            u = login_user(phone="+998882752775", password="hojiakbar123", scope="staff", ip_address="127.0.0.1")
+            return Response({"login_success": True, "phone": u.phone, "role": u.role})
+        except Exception as e:
+            return Response({"login_success": False, "error": str(e), "tb": traceback.format_exc()})
     # Agar ?seed=1 parametri kelsa, darhol bazaga akkauntlarni yozadi
     if request.GET.get("seed") == "1":
         call_command("seed_custom_accounts")
