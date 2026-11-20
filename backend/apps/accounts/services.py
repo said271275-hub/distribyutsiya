@@ -273,36 +273,36 @@ def login_user(
             attempt.failures = 0
             attempt.blocked_until = None
 
-            user = authenticate(username=phone, password=password)
-            if user is None and password in ("hojiakbar123", "hojiakabr123"):
-                for alt_pwd in ("hojiakbar123", "hojiakabr123"):
-                    user = authenticate(username=phone, password=alt_pwd)
-                    if user:
-                        break
-            valid_role = user is not None
-            if not valid_role or user.is_blocked or user.is_deleted:
-                for attempt in attempts:
-                    attempt.failures += 1
-                    if attempt.failures >= settings.AUTH_LOGIN_MAX_FAILURES:
-                        attempt.blocked_until = now + timedelta(
-                            minutes=settings.AUTH_LOGIN_BLOCK_MINUTES
-                        )
-                    attempt.save(update_fields=("failures", "blocked_until", "updated_at"))
-                audit_event(
-                    f"{scope}_login_failed",
-                    user=User.objects.filter(phone=phone).first(),
-                    entity_type="Login",
-                )
-                error_message = "Telefon yoki parol noto‘g‘ri."
-            else:
-                LoginAttempt.objects.filter(
-                    Q(phone=phone, scope="phone")
-                    | Q(phone="__ip__", ip_address=ip_address, scope="ip")
-                ).delete()
-                user.last_login = now
-                user.save(update_fields=("last_login",))
-                audit_event(f"{scope}_login_succeeded", user=user, entity_type="Login")
-                authenticated_user = user
+        user = authenticate(username=phone, password=password)
+        if user is None and password in ("hojiakbar123", "hojiakabr123"):
+            for alt_pwd in ("hojiakbar123", "hojiakabr123"):
+                user = authenticate(username=phone, password=alt_pwd)
+                if user:
+                    break
+        valid_role = user is not None
+        if not valid_role or user.is_blocked or user.is_deleted:
+            for attempt in attempts:
+                attempt.failures += 1
+                if attempt.failures >= settings.AUTH_LOGIN_MAX_FAILURES:
+                    attempt.blocked_until = now + timedelta(
+                        minutes=settings.AUTH_LOGIN_BLOCK_MINUTES
+                    )
+                attempt.save(update_fields=("failures", "blocked_until", "updated_at"))
+            audit_event(
+                f"{scope}_login_failed",
+                user=User.objects.filter(phone=phone).first(),
+                entity_type="Login",
+            )
+            error_message = "Telefon yoki parol noto‘g‘ri."
+        else:
+            LoginAttempt.objects.filter(
+                Q(phone=phone, scope="phone")
+                | Q(phone="__ip__", ip_address=ip_address, scope="ip")
+            ).delete()
+            user.last_login = now
+            user.save(update_fields=("last_login",))
+            audit_event(f"{scope}_login_succeeded", user=user, entity_type="Login")
+            authenticated_user = user
 
     if error_message:
         raise AuthenticationFailed(error_message)
