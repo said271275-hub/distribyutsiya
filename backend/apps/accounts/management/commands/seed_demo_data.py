@@ -4,7 +4,7 @@ from django.db import transaction
 from apps.accounts.models import User
 from apps.companies.models import Company, Shop, CompanyShopLink
 from apps.logistics.models import Vehicle, DriverProfile
-from apps.catalog.models import Product, Category
+from apps.catalog.models import Product
 
 
 class Command(BaseCommand):
@@ -162,10 +162,6 @@ class Command(BaseCommand):
                     link.save()
 
             # 6. Mahsulotlar
-            category, _ = Category.objects.get_or_create(
-                company=fanta,
-                name="Ichimliklar",
-            )
             fanta_products = [
                 ("Fanta Orange 0.5L", "7000.00", "piece"),
                 ("Fanta Orange 1.0L", "11000.00", "piece"),
@@ -176,8 +172,7 @@ class Command(BaseCommand):
                     company=fanta,
                     name=p_name,
                     defaults={
-                        "category": category,
-                        "base_price": p_price,
+                        "price": p_price,
                         "unit": p_unit,
                         "is_active": True,
                     }

@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.accounts.models import User
-from apps.catalog.models import Product, Category
+from apps.catalog.models import Product
 from apps.companies.models import Company, CompanyShopLink, Shop
 from apps.logistics.models import DriverProfile, Vehicle
 
@@ -84,7 +84,6 @@ class Command(BaseCommand):
         )
 
         # Fanta mahsulotlari
-        fanta_cat, _ = Category.objects.get_or_create(company=fanta, name="Ichimliklar")
         for p_name, p_unit, p_price in [
             ("Fanta Orange 1.5L", Product.Unit.BOX, Decimal("14000.00")),
             ("Fanta Orange 0.5L", Product.Unit.BOX, Decimal("8000.00")),
@@ -94,7 +93,6 @@ class Command(BaseCommand):
                 company=fanta,
                 name=p_name,
                 defaults={
-                    "category": fanta_cat,
                     "unit": p_unit,
                     "price": p_price,
                     "is_active": True,
@@ -264,7 +262,6 @@ class Command(BaseCommand):
             },
         )
 
-        pepsi_cat, _ = Category.objects.get_or_create(company=pepsi, name="Ichimliklar")
         for p_name, p_unit, p_price in [
             ("Pepsi 1.5L", Product.Unit.BOX, Decimal("14000.00")),
             ("Pepsi 0.5L", Product.Unit.BOX, Decimal("8000.00")),
@@ -275,7 +272,6 @@ class Command(BaseCommand):
                 company=pepsi,
                 name=p_name,
                 defaults={
-                    "category": pepsi_cat,
                     "unit": p_unit,
                     "price": p_price,
                     "is_active": True,
