@@ -291,7 +291,7 @@ function ShopPanel() {
       </aside>
       <main className="shop-main">
         <header className="shop-topbar">
-          <div className="shop-breadcrumb">Tarqatuv <span>/</span> {location.pathname.startsWith('/shop/recurring') ? 'Takroriy buyurtmalar' : t(navItems.find((item) => location.pathname === item.to || (item.to !== '/shop' && location.pathname.startsWith(item.to)))?.key ?? 'home')}</div>
+          <div className="shop-breadcrumb">Tarqatuv <span>/</span> {location.pathname.startsWith('/shop/recurring') ? 'Takroriy buyurtmalar' : location.pathname.startsWith('/shop/finance') ? t('finance') : t(navItems.find((item) => location.pathname === item.to || (item.to !== '/shop' && location.pathname.startsWith(item.to)))?.key ?? 'home')}</div>
           <div className="shop-top-actions">
             {activeContact?.phone ? <a className="shop-help-link" href={`tel:${activeContact.phone}`}><Phone size={16} />{t('help')}</a> : null}
             <div className="shop-language-switch" role="group" aria-label={t('language.select')}>

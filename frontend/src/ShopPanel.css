@@ -605,3 +605,14 @@
   .shop-top-actions .shop-help-link,.shop-top-actions .shop-logout{width:36px;min-height:36px}
   .shop-language-switch button{min-width:30px;padding:0 6px}
 }
+
+/* Global `.shop-app-shell button {min-height:44px; padding:10px 16px}` qoidasini yuqori panel tugmalari uchun bekor qilish */
+.shop-app-shell .shop-top-actions .shop-logout{height:36px;min-height:36px;padding:0 12px;box-shadow:none}
+.shop-app-shell .simple-theme-toggle{height:36px;min-height:36px;padding:3px;box-shadow:none}
+.shop-app-shell .shop-language-switch button{height:28px;min-height:28px;padding:0 8px;border:0;border-radius:999px;color:var(--shop-muted);background:transparent;box-shadow:none}
+.shop-app-shell .shop-language-switch button:hover:not(:disabled){border-color:transparent;color:var(--shop-text);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.shop-app-shell .shop-language-switch button.is-active,.shop-app-shell .shop-language-switch button.is-active:hover:not(:disabled){color:var(--shop-on-accent);background:var(--accent)}
+@media(max-width:680px){
+  .shop-app-shell .shop-top-actions .shop-logout{width:36px;padding:0}
+  .shop-app-shell .shop-language-switch button{padding:0 6px}
+}
