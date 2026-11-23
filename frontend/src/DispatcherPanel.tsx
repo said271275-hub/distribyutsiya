@@ -208,51 +208,81 @@ function DispatcherPanel() {
           <span className="dispatcher-brand-mark">t</span>
           <span><strong>tarqatuv</strong><small>Boshqaruv oynasi</small></span>
         </NavLink>
-        <div className="dispatcher-side-label">BOSHQARUV</div>
         <nav className="dispatcher-nav" aria-label="Boshqaruv menyusi">
-          <NavLink to="/company" end className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <BarChart3 size={18} strokeWidth={1.8} /><span>Umumiy ko‘rinish</span>
-          </NavLink>
-          <NavLink to="/company/orders" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <ClipboardList size={18} strokeWidth={1.8} /><span>Buyurtmalar</span>
-          </NavLink>
-          <NavLink to="/company/trips" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <RouteIcon size={18} strokeWidth={1.8} /><span>Reyslar va marshrut</span>
-          </NavLink>
-          <NavLink to="/company/picking-list" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <Boxes size={18} strokeWidth={1.8} /><span>Yuklash ro‘yxati</span>
-          </NavLink>
-          <NavLink to="/company/catalog" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <Tags size={18} strokeWidth={1.8} /><span>Mahsulotlar va narxlar</span>
-          </NavLink>
-          <NavLink to="/company/inventory" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <Package size={18} strokeWidth={1.8} /><span>Ombor</span>
-          </NavLink>
-          <NavLink to="/company/shops" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <MapPin size={18} strokeWidth={1.8} /><span>Do‘konlar</span>
-          </NavLink>
-          <NavLink to="/company/subscriptions" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <UserCheck size={18} strokeWidth={1.8} />
-            <span>Obuna so‘rovlari</span>
-            {Boolean(dashboardQuery.data?.pending_subscriptions) && (
-              <span className="dispatcher-nav-badge">{dashboardQuery.data?.pending_subscriptions}</span>
-            )}
-          </NavLink>
-          <NavLink to="/company/profile" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <Building2 size={18} strokeWidth={1.8} /><span>Kompaniya profili</span>
-          </NavLink>
-          <NavLink to="/company/finance" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <Wallet size={18} strokeWidth={1.8} /><span>Qarz va to‘lov</span>
-          </NavLink>
-          <NavLink to="/company/reports" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <FileText size={18} strokeWidth={1.8} /><span>Hisobotlar</span>
-          </NavLink>
-          <NavLink to="/company/fleet" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <Truck size={18} strokeWidth={1.8} /><span>Mashinalar va haydovchilar</span>
-          </NavLink>
-          <NavLink to="/company/staff" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
-            <UsersRound size={18} strokeWidth={1.8} /><span>Xodimlar</span>
-          </NavLink>
+          <div className="dispatcher-nav-group">
+            <div className="dispatcher-nav-group-label">Asosiy</div>
+            <NavLink to="/company" end className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <BarChart3 size={18} strokeWidth={1.8} /><span>Umumiy ko‘rinish</span>
+            </NavLink>
+
+          </div>
+          <div className="dispatcher-nav-group">
+            <div className="dispatcher-nav-group-label">Operatsiyalar</div>
+            <NavLink to="/company/orders" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <ClipboardList size={18} strokeWidth={1.8} /><span>Buyurtmalar</span>
+            </NavLink>
+
+            <NavLink to="/company/trips" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <RouteIcon size={18} strokeWidth={1.8} /><span>Reyslar va marshrut</span>
+            </NavLink>
+
+            <NavLink to="/company/picking-list" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <Boxes size={18} strokeWidth={1.8} /><span>Yuklash ro‘yxati</span>
+            </NavLink>
+
+          </div>
+          <div className="dispatcher-nav-group">
+            <div className="dispatcher-nav-group-label">Katalog</div>
+            <NavLink to="/company/catalog" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <Tags size={18} strokeWidth={1.8} /><span>Mahsulotlar va narxlar</span>
+            </NavLink>
+
+            <NavLink to="/company/inventory" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <Package size={18} strokeWidth={1.8} /><span>Ombor</span>
+            </NavLink>
+
+          </div>
+          <div className="dispatcher-nav-group">
+            <div className="dispatcher-nav-group-label">Mijozlar</div>
+            <NavLink to="/company/shops" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <MapPin size={18} strokeWidth={1.8} /><span>Do‘konlar</span>
+            </NavLink>
+
+            <NavLink to="/company/subscriptions" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <UserCheck size={18} strokeWidth={1.8} />
+              <span>Obuna so‘rovlari</span>
+              {Boolean(dashboardQuery.data?.pending_subscriptions) && (
+                <span className="dispatcher-nav-badge">{dashboardQuery.data?.pending_subscriptions}</span>
+              )}
+            </NavLink>
+
+          </div>
+          <div className="dispatcher-nav-group">
+            <div className="dispatcher-nav-group-label">Moliya</div>
+            <NavLink to="/company/finance" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <Wallet size={18} strokeWidth={1.8} /><span>Qarz va to‘lov</span>
+            </NavLink>
+
+            <NavLink to="/company/reports" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <FileText size={18} strokeWidth={1.8} /><span>Hisobotlar</span>
+            </NavLink>
+
+          </div>
+          <div className="dispatcher-nav-group">
+            <div className="dispatcher-nav-group-label">Boshqaruv</div>
+            <NavLink to="/company/fleet" title="Mashinalar va haydovchilar" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <Truck size={18} strokeWidth={1.8} /><span>Haydovchilar</span>
+            </NavLink>
+
+            <NavLink to="/company/staff" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <UsersRound size={18} strokeWidth={1.8} /><span>Xodimlar</span>
+            </NavLink>
+
+            <NavLink to="/company/profile" className={({ isActive }) => `dispatcher-nav-link ${isActive ? 'dispatcher-nav-active' : ''}`}>
+              <Building2 size={18} strokeWidth={1.8} /><span>Kompaniya profili</span>
+            </NavLink>
+
+          </div>
         </nav>
         <div className="dispatcher-sidebar-bottom">
           <div className="dispatcher-account">
@@ -424,8 +454,10 @@ function MetricCard({
   value: string | number
   tone?: 'default' | 'amber' | 'green' | 'red'
 }) {
+  const isZero = Number(value) === 0
+  const shownTone = isZero && (tone === 'red' || tone === 'amber') ? 'neutral' : tone
   return (
-    <article className={`dispatcher-metric dispatcher-metric-${tone}`}>
+    <article className={`dispatcher-metric dispatcher-metric-${shownTone}`}>
       <span className="dispatcher-metric-icon">{icon}</span>
       <span className="dispatcher-metric-label">{label}</span>
       <strong>{value}</strong>

@@ -77,12 +77,33 @@
 
 .dispatcher-nav {
   display: grid;
-  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  gap: 14px;
+  padding-bottom: 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.dispatcher-nav-group {
+  display: grid;
+  gap: 2px;
+}
+
+.dispatcher-nav-group-label {
+  padding: 0 10px 4px;
+  color: var(--dispatcher-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
 .dispatcher-nav-link {
   display: flex;
-  min-height: 40px;
+  min-height: 36px;
   align-items: center;
   gap: 11px;
   padding: 0 10px;
@@ -107,6 +128,7 @@
 
 .dispatcher-sidebar-bottom {
   display: grid;
+  flex: 0 0 auto;
   gap: 12px;
   margin-top: auto;
   padding-top: 14px;
@@ -323,6 +345,11 @@
 .dispatcher-metric-red .dispatcher-metric-icon {
   color: var(--status-bad);
   background: color-mix(in srgb, var(--status-bad) 15%, transparent);
+}
+
+.dispatcher-metric-neutral .dispatcher-metric-icon {
+  color: var(--dispatcher-muted);
+  background: color-mix(in srgb, var(--dispatcher-muted) 14%, transparent);
 }
 
 .dispatcher-metric-label {
@@ -1596,4 +1623,13 @@
 
 .dispatcher-calendar-action-btn.is-accent:hover {
   background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* Tun rejimida yorqin fonlardagi oq yozuvlar o'qilmasdi */
+.dark .dispatcher-brand-mark {
+  color: #06261f;
+}
+
+.dark .dispatcher-nav-badge {
+  color: #2b1d00;
 }
