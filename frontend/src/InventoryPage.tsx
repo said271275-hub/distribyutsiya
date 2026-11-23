@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, History, Package } from 'lucide-react'
 import api, { apiErrorMessage } from './api'
+import ShopDatePicker from './ShopDatePicker'
 import './InventoryPage.css'
 
 type Page<T> = {
@@ -202,12 +203,7 @@ export default function InventoryPage() {
               <input name="quantity" type="number" min="0.01" step="0.01" required />
             </label>
             <label>Sana
-              <input
-                type="date"
-                required
-                value={receiptDate}
-                onChange={(event) => setReceiptDate(event.target.value)}
-              />
+              <ShopDatePicker value={receiptDate} onChange={setReceiptDate} />
             </label>
           </div>
           <label>Partiya
