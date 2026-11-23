@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api, { apiErrorMessage } from './api'
 import { formatOrderDate } from './dispatcherUtils'
+import ShopDatePicker from './ShopDatePicker'
 
 type PickingItem = {
   product_id: number
@@ -51,7 +52,7 @@ export default function PickingListPage() {
           <label className="dispatcher-trip-date">
             <CalendarDays size={16} />
             <span>Sana</span>
-            <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            <ShopDatePicker value={date} onChange={setDate} />
           </label>
           <button type="button" className="dispatcher-secondary-button dispatcher-print-button" onClick={() => window.print()}>
             <Printer size={16} /> Chop etish
