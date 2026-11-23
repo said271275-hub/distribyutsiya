@@ -1,45 +1,47 @@
-/* Do'konchi paneli: zamonaviy sana tanlash (kun va tun rejimi) */
-.shop-datepicker{position:relative;display:block;width:100%}
+/* Zamonaviy sana tanlash: do'konchi, dispetcher va haydovchi panellari uchun (kun va tun rejimi) */
+.shop-datepicker{--sdp-line:var(--shop-line,var(--border));--sdp-text:var(--shop-text,var(--text));--sdp-muted:var(--shop-muted,var(--text-muted));--sdp-surface:var(--shop-surface,var(--surface));--sdp-pop:var(--modal,var(--sdp-surface));--sdp-on-accent:var(--shop-on-accent,#fff);position:relative;display:block;width:100%;min-width:150px;text-align:left}
+.dark .shop-datepicker{--sdp-on-accent:var(--shop-on-accent,#06261f)}
 
 /* Tugma (maydon) */
-.shop-app-shell .shop-datepicker .sdp-trigger{display:flex;width:100%;min-height:40px;align-items:center;justify-content:flex-start;gap:9px;padding:9px 10px;border:1px solid var(--shop-line);border-radius:5px;color:var(--shop-text);background:var(--shop-surface);box-shadow:none;font:inherit;font-size:12px;font-weight:600;text-align:left;cursor:pointer}
-.shop-app-shell .shop-datepicker .sdp-trigger:hover:not(:disabled){border-color:var(--accent);background:var(--shop-surface)}
-.shop-app-shell .shop-datepicker .sdp-trigger.is-open{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.shop-datepicker.shop-datepicker .sdp-trigger{display:flex;width:100%;min-height:40px;align-items:center;justify-content:flex-start;gap:9px;padding:9px 10px;border:1px solid var(--sdp-line);border-radius:6px;color:var(--sdp-text);background:var(--sdp-surface);box-shadow:none;font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}
+.shop-datepicker.shop-datepicker .sdp-trigger:hover:not(:disabled){border-color:var(--accent);background:var(--sdp-surface)}
+.shop-datepicker.shop-datepicker .sdp-trigger.is-open{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
 .shop-datepicker .sdp-trigger-icon{flex:0 0 auto;color:var(--accent)}
-.shop-datepicker .sdp-trigger-chevron{margin-left:auto;flex:0 0 auto;color:var(--shop-muted);transition:transform .15s ease}
+.shop-datepicker .sdp-trigger-chevron{margin-left:auto;flex:0 0 auto;color:var(--sdp-muted);transition:transform .15s ease}
 .shop-datepicker .sdp-trigger.is-open .sdp-trigger-chevron{transform:rotate(180deg)}
-.shop-datepicker .sdp-placeholder{color:var(--shop-muted);font-weight:500}
+.shop-datepicker .sdp-placeholder{color:var(--sdp-muted);font-weight:500}
 
 /* Qalqib chiquvchi kalendar */
-.shop-app-shell .shop-datepicker .sdp-popover{position:absolute;z-index:900;top:calc(100% + 6px);left:0;width:292px;max-width:calc(100vw - 30px);padding:14px;border:1px solid var(--shop-line);border-radius:12px;color:var(--shop-text);background:var(--modal,var(--shop-surface));box-shadow:0 14px 40px rgb(0 0 0 / 22%),0 2px 6px rgb(0 0 0 / 10%);animation:sdp-pop .14s ease-out}
+.shop-datepicker.shop-datepicker .sdp-popover{position:absolute;z-index:1000;top:calc(100% + 6px);left:0;width:292px;max-width:calc(100vw - 30px);padding:14px;border:1px solid var(--sdp-line);border-radius:12px;color:var(--sdp-text);background:var(--sdp-pop);box-shadow:0 14px 40px rgb(0 0 0 / 22%),0 2px 6px rgb(0 0 0 / 10%);font-size:13px;text-align:left;animation:sdp-pop .14s ease-out}
+.shop-datepicker.shop-datepicker .sdp-popover.is-right{left:auto;right:0}
 @keyframes sdp-pop{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 
 .shop-datepicker .sdp-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
-.shop-datepicker .sdp-title{color:var(--shop-text);font-size:15px;font-weight:700;line-height:1.2}
+.shop-datepicker .sdp-title{color:var(--sdp-text);font-size:15px;font-weight:700;line-height:1.2}
 .shop-datepicker .sdp-nav-group{display:flex;gap:6px}
-.shop-app-shell .shop-datepicker .sdp-nav{width:32px;height:32px;min-height:32px;padding:0;border:1px solid var(--shop-line);border-radius:8px;color:var(--shop-text);background:transparent;box-shadow:none;cursor:pointer}
-.shop-app-shell .shop-datepicker .sdp-nav:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
-.shop-app-shell .shop-datepicker .sdp-nav:disabled{opacity:.35;cursor:not-allowed}
+.shop-datepicker.shop-datepicker .sdp-nav{width:32px;height:32px;min-height:32px;padding:0;border:1px solid var(--sdp-line);border-radius:8px;color:var(--sdp-text);background:transparent;box-shadow:none;cursor:pointer}
+.shop-datepicker.shop-datepicker .sdp-nav:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.shop-datepicker.shop-datepicker .sdp-nav:disabled{opacity:.35;cursor:not-allowed}
 
 /* Hafta kunlari va kunlar to'ri */
 .shop-datepicker .sdp-weekdays,.shop-datepicker .sdp-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
 .shop-datepicker .sdp-weekdays{margin-bottom:4px}
-.shop-datepicker .sdp-weekdays span{padding:4px 0;color:var(--shop-muted);font-size:11px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.03em}
+.shop-datepicker .sdp-weekdays span{padding:4px 0;color:var(--sdp-muted);font-size:11px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.03em}
 
-.shop-app-shell .shop-datepicker .sdp-day{width:100%;height:36px;min-height:36px;padding:0;border:0;border-radius:8px;color:var(--shop-text);background:transparent;box-shadow:none;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer}
-.shop-app-shell .shop-datepicker .sdp-day:hover:not(:disabled){border:0;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
-.shop-app-shell .shop-datepicker .sdp-day.is-today{box-shadow:inset 0 0 0 1.5px var(--accent)}
-.shop-app-shell .shop-datepicker .sdp-day.is-selected,.shop-app-shell .shop-datepicker .sdp-day.is-selected:hover:not(:disabled){color:var(--shop-on-accent,#fff);background:var(--accent);box-shadow:none;font-weight:750}
-.shop-app-shell .shop-datepicker .sdp-day:disabled{color:var(--shop-muted);opacity:.38;cursor:not-allowed}
+.shop-datepicker.shop-datepicker .sdp-day{width:100%;height:36px;min-height:36px;padding:0;border:0;border-radius:8px;color:var(--sdp-text);background:transparent;box-shadow:none;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer}
+.shop-datepicker.shop-datepicker .sdp-day:hover:not(:disabled){border:0;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.shop-datepicker.shop-datepicker .sdp-day.is-today{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.shop-datepicker.shop-datepicker .sdp-day.is-selected,.shop-datepicker.shop-datepicker .sdp-day.is-selected:hover:not(:disabled){color:var(--sdp-on-accent);background:var(--accent);box-shadow:none;font-weight:750}
+.shop-datepicker.shop-datepicker .sdp-day:disabled{color:var(--sdp-muted);opacity:.38;cursor:not-allowed}
 
 /* Pastki amallar */
-.shop-datepicker .sdp-footer{display:flex;justify-content:space-between;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--shop-line)}
-.shop-app-shell .shop-datepicker .sdp-action{flex:1;min-height:36px;padding:0 12px;border:1px solid var(--shop-line);border-radius:8px;color:var(--shop-text);background:transparent;box-shadow:none;font-size:12px;font-weight:700;cursor:pointer}
-.shop-app-shell .shop-datepicker .sdp-action:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
-.shop-app-shell .shop-datepicker .sdp-action.is-accent{border-color:transparent;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
-.shop-app-shell .shop-datepicker .sdp-action:disabled{opacity:.4;cursor:not-allowed}
+.shop-datepicker .sdp-footer{display:flex;justify-content:space-between;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--sdp-line)}
+.shop-datepicker.shop-datepicker .sdp-action{flex:1;min-height:36px;padding:0 12px;border:1px solid var(--sdp-line);border-radius:8px;color:var(--sdp-text);background:transparent;box-shadow:none;font-size:12px;font-weight:700;cursor:pointer}
+.shop-datepicker.shop-datepicker .sdp-action:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.shop-datepicker.shop-datepicker .sdp-action.is-accent{border-color:transparent;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.shop-datepicker.shop-datepicker .sdp-action:disabled{opacity:.4;cursor:not-allowed}
 
 @media(max-width:680px){
-  .shop-app-shell .shop-datepicker .sdp-popover{width:min(292px,calc(100vw - 30px))}
-  .shop-app-shell .shop-datepicker .sdp-day{height:40px;min-height:40px}
+  .shop-datepicker.shop-datepicker .sdp-popover{width:min(292px,calc(100vw - 30px))}
+  .shop-datepicker.shop-datepicker .sdp-day{height:40px;min-height:40px}
 }

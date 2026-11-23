@@ -15,6 +15,8 @@ type ShopDatePickerProps = {
   ariaLabel?: string
 }
 
+const POPOVER_WIDTH = 292
+
 const MONTHS = {
   uz: ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'],
   ru: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
@@ -62,6 +64,7 @@ export default function ShopDatePicker({ value, onChange, min, max, placeholder,
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const [open, setOpen] = useState(false)
+  const [alignRight, setAlignRight] = useState(false)
   const [view, setView] = useState(() => viewFor(value, min))
 
   useEffect(() => {
@@ -86,7 +89,12 @@ export default function ShopDatePicker({ value, onChange, min, max, placeholder,
   const isDisabled = (iso: string) => Boolean((min && iso < min) || (max && iso > max))
 
   const toggle = () => {
-    if (!open) setView(viewFor(value, min))
+    if (!open) {
+      setView(viewFor(value, min))
+      // Ekran o‘ng chetiga yaqin bo‘lsa, kalendarni o‘ngga tekislaymiz
+      const rect = rootRef.current?.getBoundingClientRect()
+      setAlignRight(Boolean(rect && rect.left + POPOVER_WIDTH > window.innerWidth - 8 && rect.right - POPOVER_WIDTH >= 8))
+    }
     setOpen((current) => !current)
   }
 
@@ -114,7 +122,8 @@ export default function ShopDatePicker({ value, onChange, min, max, placeholder,
   const display = parsed ? `${pad(parsed.day)}.${pad(parsed.month + 1)}.${parsed.year}` : ''
 
   return (
-    <div className="shop-datepicker" ref={rootRef}>
+    // preventDefault: <label> ichida ishlatilganda, kalendarning bo‘sh joyiga bosish uni yopib qo‘ymasligi uchun
+    <div className="shop-datepicker" ref={rootRef} onClick={(event) => event.preventDefault()}>
       <button
         ref={triggerRef}
         type="button"
@@ -130,7 +139,7 @@ export default function ShopDatePicker({ value, onChange, min, max, placeholder,
       </button>
 
       {open && (
-        <div className="sdp-popover" role="dialog" aria-label={`${MONTHS[lang][month]} ${year}`}>
+        <div className={`sdp-popover${alignRight ? ' is-right' : ''}`} role="dialog" aria-label={`${MONTHS[lang][month]} ${year}`}>
           <div className="sdp-header">
             <strong className="sdp-title">{MONTHS[lang][month]} {year}</strong>
             <div className="sdp-nav-group">
