@@ -259,10 +259,6 @@ function DispatcherPanel() {
             <span className="dispatcher-avatar">{user.phone.slice(-2)}</span>
             <span><strong>{user.phone}</strong><small>Kompaniya boshqaruvchisi</small></span>
           </div>
-          {logoutError && <p className="dispatcher-error" role="alert">{logoutError}</p>}
-          <button type="button" className="dispatcher-logout" onClick={() => void signOut()}>
-            <LogOut size={16} /> Tizimdan chiqish
-          </button>
         </div>
       </aside>
       <main className="dispatcher-main">
@@ -271,8 +267,12 @@ function DispatcherPanel() {
           <div className="dispatcher-top-actions">
             <span className="dispatcher-today"><CalendarDays size={15} /> {formatOrderDate(localDate())}</span>
             <DispatcherThemeToggle />
+            <button type="button" className="dispatcher-logout" onClick={() => void signOut()} aria-label="Tizimdan chiqish" title="Tizimdan chiqish">
+              <LogOut size={16} /><span>Chiqish</span>
+            </button>
           </div>
         </header>
+        {logoutError && <p className="dispatcher-error dispatcher-logout-error" role="alert">{logoutError}</p>}
         <div className="dispatcher-content">
           {companyQuery.data?.status === 'pending' && (
             <div className="dispatcher-banner dispatcher-banner-amber" role="alert">

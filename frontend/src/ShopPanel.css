@@ -558,3 +558,8 @@
   .shop-metric>strong{font-size:18px}
   .shop-finance-history{padding:15px}
 }
+
+/* Chiqish tugmasi: yon paneldan yuqori panelga ko'chirildi */
+.shop-logout{display:inline-flex;min-height:34px;align-items:center;gap:7px;padding:0 12px;border:1px solid var(--shop-line);border-radius:6px;color:var(--shop-text);background:var(--shop-surface);font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:color .15s,background .15s,border-color .15s}
+.shop-logout:hover,.shop-logout:focus-visible{border-color:var(--status-bad);color:var(--status-bad);background:color-mix(in srgb,var(--status-bad) 10%,transparent)}
+@media(max-width:680px){.shop-logout{width:35px;justify-content:center;padding:0}.shop-logout span{display:none}}

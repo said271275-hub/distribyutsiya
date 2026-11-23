@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  LogOut,
   ArrowRight,
   Building2,
   CalendarDays,
@@ -286,7 +287,6 @@ function ShopPanel() {
         </nav>
         <div className="shop-sidebar-bottom">
           <div className="shop-account"><span className="shop-account-avatar">{user?.phone.slice(-2)}</span><span><strong>{profile.data?.name || user?.phone}</strong><small>{user?.phone}</small></span></div>
-          <button className="shop-logout" onClick={() => void signOut()} type="button"><ArrowLeft size={16} />{t('logout')}</button>
         </div>
       </aside>
       <main className="shop-main">
@@ -299,6 +299,7 @@ function ShopPanel() {
               if (value === 'uz' || value === 'ru') setLanguage(value)
             }} aria-label={t('language.select')}><option value="uz">{t('language.uz')}</option><option value="ru">{t('language.ru')}</option></select><ChevronDown size={13} /></label>
             <ShopThemeToggle />
+            <button className="shop-logout" onClick={() => void signOut()} type="button" aria-label={t('logout')} title={t('logout')}><LogOut size={16} /><span>{t('logout')}</span></button>
           </div>
         </header>
         {notice && <div className="shop-toast" role="status"><Check size={16} />{notice}<button type="button" aria-label="Yopish" onClick={() => setNotice('')}><X size={15} /></button></div>}
