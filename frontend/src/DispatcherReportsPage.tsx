@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api, { apiErrorMessage } from './api'
 import { formatCurrency } from './dispatcherUtils'
+import ShopDatePicker from './ShopDatePicker'
 import './DispatcherReports.css'
 
 type ReportName = 'sales' | 'debtors' | 'drivers' | 'products'
@@ -196,24 +197,22 @@ export default function DispatcherReportsPage() {
           </div>
           <label>
             Boshlanish sanasi
-            <input
-              type="date"
+            <ShopDatePicker
               value={startDate}
               max={endDate}
-              onChange={(event) => {
-                setStartDate(event.target.value)
+              onChange={(value) => {
+                setStartDate(value)
                 setPeriod('custom')
               }}
             />
           </label>
           <label>
             Tugash sanasi
-            <input
-              type="date"
+            <ShopDatePicker
               value={endDate}
               min={startDate}
-              onChange={(event) => {
-                setEndDate(event.target.value)
+              onChange={(value) => {
+                setEndDate(value)
                 setPeriod('custom')
               }}
             />
