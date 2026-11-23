@@ -35,6 +35,8 @@ services:
         value: https://distribyutsiya.vercel.app
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
         value: https://distribyutsiya-backend.onrender.com,https://distribyutsiya.vercel.app
+      - key: CLOUDINARY_URL
+        sync: false
       - key: OTP_PROVIDER
         value: apps.accounts.sms.EskizOtpProvider
       - key: ESKIZ_EMAIL
