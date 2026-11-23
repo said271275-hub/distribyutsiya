@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Check, CreditCard, Search, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import api, { apiErrorMessage } from './api'
 import {
@@ -13,6 +13,7 @@ import {
   formatFinanceMoney,
   type FinanceBalance,
 } from './dispatcherFinanceUtils'
+import ShopDatePicker from './ShopDatePicker'
 import './DispatcherFinance.css'
 
 type Page<T> = { results: T[]; count: number; next: string | null; previous: string | null }
@@ -222,7 +223,11 @@ export default function DispatcherFinancePage() {
                         {paymentForm.formState.errors.amount && <small role="alert">{paymentForm.formState.errors.amount.message}</small>}
                       </label>
                       <label>Sana
-                        <input type="date" {...paymentForm.register('paid_at')} />
+                        <Controller
+                          control={paymentForm.control}
+                          name="paid_at"
+                          render={({ field }) => <ShopDatePicker value={field.value} onChange={field.onChange} />}
+                        />
                         {paymentForm.formState.errors.paid_at && <small role="alert">{paymentForm.formState.errors.paid_at.message}</small>}
                       </label>
                       <label>To‘lov turi
