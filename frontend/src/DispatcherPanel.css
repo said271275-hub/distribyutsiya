@@ -1633,3 +1633,11 @@
 .dark .dispatcher-nav-badge {
   color: #2b1d00;
 }
+
+.dispatcher-image-hint {
+  display: block;
+  margin: 2px 0 8px;
+  color: var(--dispatcher-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

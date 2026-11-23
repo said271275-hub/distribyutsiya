@@ -26,6 +26,21 @@ export function formatMediaUrl(url: string | null | undefined): string | null {
   return API_BASE_URL ? `${API_BASE_URL}${normalized}` : normalized
 }
 
+/**
+ * Cloudinary rasmlarini bir xil o'lchamga (kvadrat, kesmasdan) va yengil formatga keltiradi.
+ * Cloudinary bo'lmagan yoki allaqachon o'zgartirilgan havolalarga tegmaydi.
+ */
+export function optimizeImageUrl(url: string | null | undefined, size = 600): string | null {
+  if (!url) return null
+  const marker = '/image/upload/'
+  const at = url.indexOf(marker)
+  if (!url.includes('res.cloudinary.com') || at === -1) return url
+  const head = url.slice(0, at + marker.length)
+  const rest = url.slice(at + marker.length)
+  if (rest.split('/')[0].includes(',')) return url
+  return `${head}c_limit,w_${size},h_${size},f_auto,q_auto/${rest}`
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL ? `${API_BASE_URL}/api` : '/api',
   withCredentials: true,

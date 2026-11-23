@@ -29,7 +29,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
-import api, { apiErrorMessage, formatMediaUrl } from './api'
+import api, { apiErrorMessage, formatMediaUrl, optimizeImageUrl } from './api'
 import {
   financeEntryLabel,
   formatFinanceBalance,
@@ -369,7 +369,7 @@ function CatalogPreview({ t }: { t: Copy }) {
 
 function ProductCard({ product, onAdd, compact = false }: { product: CatalogProduct; onAdd: () => void; compact?: boolean }) {
   const [imgFailed, setImgFailed] = useState(false)
-  const resolvedImg = formatMediaUrl(product.image_url)
+  const resolvedImg = optimizeImageUrl(formatMediaUrl(product.image_url))
 
   return (
     <article className={`shop-product-card ${compact ? 'shop-product-compact' : ''}`}>
@@ -390,9 +390,9 @@ function ProductCard({ product, onAdd, compact = false }: { product: CatalogProd
         <span>{product.company_name}</span>
         {product.company_cutoff_time && <small>· {product.company_cutoff_time.slice(0, 5)}</small>}
       </div>
-      <h3>{product.name}</h3>
+      <h3 title={product.name}>{product.name}</h3>
       <div className="shop-product-unit">{unitLabels[product.unit]}</div>
-      <div className="shop-product-price">{money(product.unit_price)} <small>/ {unitLabels[product.unit]}</small></div>
+      <div className="shop-product-price"><strong>{money(product.unit_price)}</strong> <small>/ {unitLabels[product.unit]}</small></div>
       {Number(product.discount_percent) > 0 ? <span className="shop-discount">−{Number(product.discount_percent)}%</span> : null}
       {!compact && <button className="shop-add-button" onClick={onAdd} type="button"><Plus size={17} /> Savatga qo‘shish</button>}
     </article>

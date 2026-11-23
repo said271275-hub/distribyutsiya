@@ -280,6 +280,9 @@ export default function DispatcherCatalogPage() {
               <span className="dispatcher-field-title">
                 Mahsulot rasmi{!editingProduct ? ' (majburiy)' : ' (ixtiyoriy)'}
               </span>
+              <small className="dispatcher-image-hint">
+                Maslahat: rasm oq yoki shaffof fonda, kvadrat (1:1) va butun mahsulot ko‘ringan bo‘lsin.
+              </small>
 
               {imagePreviewUrl ? (
                 <div className="dispatcher-image-preview-card">
