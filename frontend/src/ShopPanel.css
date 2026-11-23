@@ -513,3 +513,48 @@
   color: var(--shop-text);
   font-weight: 600;
 }
+
+/* ===== Do'konchi paneli: o'qilishi yaxshilangan dizayn (kun va tun rejimi) ===== */
+.shop-app-shell{--shop-on-accent:#fff;--shop-bad:var(--status-bad);--shop-good:var(--status-ok)}
+.dark .shop-app-shell{--shop-on-accent:#06261f}
+.shop-brand-mark,.shop-nav-count,.shop-primary-button,.shop-mobile-icon b,.shop-add-button:hover{color:var(--shop-on-accent)}
+
+.shop-eyebrow{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.shop-metric{box-shadow:0 1px 2px color-mix(in srgb,var(--shop-text) 8%,transparent)}
+.shop-metric-label{font-size:12px;font-weight:600}
+.shop-metric>strong{font-size:22px;font-weight:750}
+.shop-metric-foot{font-size:12px;font-weight:600}
+
+/* Jami saldo kartasi */
+.shop-balance-panel{position:relative;display:grid;gap:14px;margin-bottom:17px;padding:22px 22px 18px 26px;overflow:hidden;border:1px solid var(--shop-line);border-radius:10px;color:var(--shop-text);background:linear-gradient(135deg,color-mix(in srgb,var(--shop-tone,var(--status-ok)) 14%,var(--shop-surface)),var(--shop-surface) 70%);box-shadow:0 1px 3px color-mix(in srgb,var(--shop-text) 10%,transparent)}
+.shop-balance-panel::before{content:"";position:absolute;inset:0 auto 0 0;width:5px;background:var(--shop-tone,var(--status-ok))}
+.shop-balance-panel.is-debt{--shop-tone:var(--status-bad)}
+.shop-balance-panel.is-prepaid,.shop-balance-panel.is-clear{--shop-tone:var(--status-ok)}
+.shop-balance-panel>.shop-balance-label{display:flex;align-items:center;gap:10px;color:var(--shop-muted);font-size:13px;font-weight:650}
+.shop-balance-label i{display:grid;width:32px;height:32px;place-items:center;border-radius:9px;color:var(--shop-tone);background:color-mix(in srgb,var(--shop-tone) 16%,transparent)}
+.shop-balance-panel>.shop-balance-amount{color:var(--shop-tone);font-size:clamp(26px,4.6vw,36px);font-weight:780;line-height:1.15}
+.shop-balance-list{display:grid;gap:0;margin:0;padding:0;list-style:none;border-top:1px solid var(--shop-line)}
+.shop-balance-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--shop-line);font-size:14px}
+.shop-balance-list li>span{color:var(--shop-text);font-weight:600}
+.shop-balance-list li>b{font-weight:700;text-align:right}
+.shop-balance-list b.is-debt{color:var(--status-bad)}
+.shop-balance-list b.is-prepaid,.shop-balance-list b.is-clear{color:var(--status-ok)}
+.shop-balance-panel>.shop-balance-foot{color:var(--shop-muted);font-size:13px;line-height:1.5}
+.shop-balance-foot b{color:var(--shop-text);font-weight:700}
+
+/* Tarix bo'limlari */
+.shop-finance-history{margin-bottom:13px;padding:20px;border-radius:10px;box-shadow:0 1px 2px color-mix(in srgb,var(--shop-text) 8%,transparent)}
+.shop-finance-history .shop-section-head h2{font-size:18px}
+.shop-finance-history .shop-section-head>svg{color:var(--accent)}
+.shop-payment-row{padding:14px 0}
+.shop-payment-row strong{font-size:14px}
+.shop-payment-row small{font-size:12px}
+.shop-payment-row>b{font-size:14px}
+.shop-inline-empty{padding:22px 12px;border:1px dashed var(--shop-line);border-radius:8px;color:var(--shop-muted);font-size:13px;text-align:center}
+
+@media(max-width:680px){
+  .shop-balance-panel{padding:18px 16px 16px 20px}
+  .shop-balance-list li{font-size:13px}
+  .shop-metric>strong{font-size:18px}
+  .shop-finance-history{padding:15px}
+}

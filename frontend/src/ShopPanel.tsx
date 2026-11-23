@@ -1037,9 +1037,15 @@ function FinancePage({ t }: { t: Copy }) {
     (total, item) => total + Number(item.container_deposit),
     0,
   ) ?? 0
+  const balanceTotal = Number(query.data?.balance ?? 0)
   return <><PageHeading eyebrow="HISOB-KITOB" title={t('finance')} description="Qarz balansi va qayd etilgan to‘lovlar." />
     {query.isLoading ? <LoadingRows /> : query.isError ? <ErrorState message="Hisob-kitobni yuklab bo‘lmadi" onRetry={() => void query.refetch()} t={t} /> : <>
-      <section className="shop-balance-panel"><span><Wallet size={19} />Jami saldo</span><strong>{formatFinanceBalance(query.data?.balance ?? 0)}</strong><small>{query.data?.balances.map((item) => `${item.company_name}: ${formatFinanceBalance(item.balance)}`).join(' · ')}</small><small>Tara depoziti alohida: {money(containerDeposit)}</small></section>
+      <section className={`shop-balance-panel ${balanceTotal > 0 ? 'is-debt' : balanceTotal < 0 ? 'is-prepaid' : 'is-clear'}`}>
+        <span className="shop-balance-label"><i><Wallet size={18} /></i>Jami saldo</span>
+        <strong className="shop-balance-amount">{formatFinanceBalance(balanceTotal)}</strong>
+        {query.data?.balances.length ? <ul className="shop-balance-list">{query.data.balances.map((item) => <li key={item.company_id}><span>{item.company_name}</span><b className={Number(item.balance) > 0 ? 'is-debt' : Number(item.balance) < 0 ? 'is-prepaid' : 'is-clear'}>{formatFinanceBalance(item.balance)}</b></li>)}</ul> : null}
+        <small className="shop-balance-foot">Tara depoziti alohida: <b>{money(containerDeposit)}</b></small>
+      </section>
       <section className="shop-finance-history"><div className="shop-section-head"><div><span className="shop-eyebrow">TO‘LOVLAR</span><h2>{t('paymentHistory')}</h2></div><CreditCard size={20} /></div>
         {!query.data?.payments.length ? <div className="shop-inline-empty">{t('noPayments')}</div> : query.data.payments.map((payment) => <article className="shop-payment-row" key={payment.id}><span className="shop-payment-icon"><CreditCard size={18} /></span><div><strong>{payment.company_name}</strong><small>{formatFinanceDate(payment.paid_at ?? payment.created_at)} · {payment.method}</small></div><b>{money(payment.amount)}</b></article>)}
       </section>
