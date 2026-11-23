@@ -37,7 +37,7 @@ import {
   formatFinanceMoney,
 } from './dispatcherFinanceUtils'
 import { useAuth } from './useAuth'
-import { StickmanThemeToggle } from './StickmanThemeToggle'
+import { SimpleThemeToggle } from './SimpleThemeToggle'
 import { useTranslation } from './i18n/useTranslation'
 import { ru } from './i18n/ru'
 import { uz } from './i18n/uz'
@@ -184,7 +184,7 @@ function dateInDays(days: number) {
 }
 
 function ShopThemeToggle() {
-  return <StickmanThemeToggle />
+  return <SimpleThemeToggle />
 }
 
 function LoadingRows() {

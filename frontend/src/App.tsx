@@ -5,7 +5,7 @@ import { Controller, useForm, type Control } from 'react-hook-form'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { useAuth } from './useAuth'
-import { StickmanThemeToggle } from './StickmanThemeToggle'
+import { SimpleThemeToggle } from './SimpleThemeToggle'
 import api, { apiErrorMessage, type UserRole } from './api'
 import { formatDate } from './i18n/format'
 import { LanguageSelect } from './i18n/LanguageSelect'
@@ -83,7 +83,7 @@ function normalizePhone(value: string) {
 }
 
 function ThemeToggle() {
-  return <StickmanThemeToggle />
+  return <SimpleThemeToggle />
 }
 
 function Brand({ inverse = false }: { inverse?: boolean }) {

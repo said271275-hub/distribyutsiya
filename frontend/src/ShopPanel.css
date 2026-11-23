@@ -589,3 +589,5 @@
   .shop-product-company-badge,.shop-product-company-badge small,.shop-product-unit,.shop-product-price small{font-size:11px}
   .shop-product-card .shop-add-button{min-height:40px;font-size:12px}
 }
+
+.shop-top-actions .simple-theme-toggle{width:34px;height:34px;border-radius:6px;border-color:var(--shop-line);background:var(--shop-surface)}
