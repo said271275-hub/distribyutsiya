@@ -591,3 +591,5 @@
 }
 
 .shop-top-actions .simple-theme-toggle{width:34px;height:34px;border-radius:6px;border-color:var(--shop-line);background:var(--shop-surface)}
+.shop-language select{width:58px;padding:0 18px 0 10px;font-size:13px;font-weight:650}
+.shop-language svg{right:6px}

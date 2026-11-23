@@ -1,5 +1,6 @@
 import { Moon, Sun } from 'lucide-react'
 import { useTheme } from './useTheme'
+import './SimpleThemeToggle.css'
 
 /** Oddiy kun/tun tugmasi: kunda oy, tunda quyosh belgisi ko'rsatiladi (bosilganda shunga o'tadi). */
 export function SimpleThemeToggle({ className = '' }: { className?: string }) {

@@ -297,7 +297,7 @@ function ShopPanel() {
             <label className="shop-language"><span className="sr-only">{t('language.select')}</span><select value={language} onChange={(event) => {
               const value = event.target.value
               if (value === 'uz' || value === 'ru') setLanguage(value)
-            }} aria-label={t('language.select')}><option value="uz">{t('language.uz')}</option><option value="ru">{t('language.ru')}</option></select><ChevronDown size={13} /></label>
+            }} aria-label={t('language.select')}><option value="uz">UZ</option><option value="ru">RU</option></select><ChevronDown size={13} /></label>
             <ShopThemeToggle />
             <button className="shop-logout" onClick={() => void signOut()} type="button" aria-label={t('logout')} title={t('logout')}><LogOut size={16} /><span>{t('logout')}</span></button>
           </div>
