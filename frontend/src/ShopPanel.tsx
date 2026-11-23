@@ -294,10 +294,11 @@ function ShopPanel() {
           <div className="shop-breadcrumb">Tarqatuv <span>/</span> {location.pathname.startsWith('/shop/recurring') ? 'Takroriy buyurtmalar' : t(navItems.find((item) => location.pathname === item.to || (item.to !== '/shop' && location.pathname.startsWith(item.to)))?.key ?? 'home')}</div>
           <div className="shop-top-actions">
             {activeContact?.phone ? <a className="shop-help-link" href={`tel:${activeContact.phone}`}><Phone size={16} />{t('help')}</a> : null}
-            <label className="shop-language"><span className="sr-only">{t('language.select')}</span><select value={language} onChange={(event) => {
-              const value = event.target.value
-              if (value === 'uz' || value === 'ru') setLanguage(value)
-            }} aria-label={t('language.select')}><option value="uz">UZ</option><option value="ru">RU</option></select><ChevronDown size={13} /></label>
+            <div className="shop-language-switch" role="group" aria-label={t('language.select')}>
+              {(['uz', 'ru'] as const).map((code) => (
+                <button key={code} type="button" className={language === code ? 'is-active' : ''} aria-pressed={language === code} onClick={() => setLanguage(code)}>{code.toUpperCase()}</button>
+              ))}
+            </div>
             <ShopThemeToggle />
             <button className="shop-logout" onClick={() => void signOut()} type="button" aria-label={t('logout')} title={t('logout')}><LogOut size={16} /><span>{t('logout')}</span></button>
           </div>

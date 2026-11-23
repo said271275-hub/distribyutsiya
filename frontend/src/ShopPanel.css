@@ -590,6 +590,18 @@
   .shop-product-card .shop-add-button{min-height:40px;font-size:12px}
 }
 
-.shop-top-actions .simple-theme-toggle{width:34px;height:34px;border-radius:6px;border-color:var(--shop-line);background:var(--shop-surface)}
-.shop-language select{width:58px;padding:0 18px 0 10px;font-size:13px;font-weight:650}
-.shop-language svg{right:6px}
+
+/* ===== Yuqori panel: til almashtirgich va bir xil balandlik ===== */
+.shop-top-actions{gap:10px}
+.shop-top-actions .shop-help-link,.shop-top-actions .shop-logout{min-height:36px}
+.shop-language-switch{display:inline-flex;align-items:center;gap:2px;height:36px;padding:3px;border:1px solid var(--shop-line);border-radius:999px;background:var(--shop-canvas)}
+.shop-language-switch button{min-width:34px;height:28px;padding:0 8px;border:0;border-radius:999px;color:var(--shop-muted);background:transparent;font:inherit;font-size:12px;font-weight:700;letter-spacing:.03em;cursor:pointer;transition:color .15s,background .15s}
+.shop-language-switch button:hover{color:var(--shop-text)}
+.shop-language-switch button.is-active{color:var(--shop-on-accent);background:var(--accent)}
+.shop-language-switch button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.shop-breadcrumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:680px){
+  .shop-top-actions{gap:6px}
+  .shop-top-actions .shop-help-link,.shop-top-actions .shop-logout{width:36px;min-height:36px}
+  .shop-language-switch button{min-width:30px;padding:0 6px}
+}
