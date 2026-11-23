@@ -1641,3 +1641,170 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* ===== Bosh sahifa: asosiy kartalar, boshlash qadamlari, reys holati ranglari ===== */
+.dispatcher-metric-featured {
+  padding: 20px 18px;
+}
+
+.dispatcher-metric-featured .dispatcher-metric-icon {
+  width: 46px;
+  height: 46px;
+}
+
+.dispatcher-metric-featured > strong {
+  font-size: 30px;
+}
+
+.dispatcher-metric-featured .dispatcher-metric-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dispatcher-metric-unit {
+  margin-left: 5px;
+  color: var(--dispatcher-muted);
+  font-size: 0.5em;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.dispatcher-start-guide {
+  margin-bottom: 24px;
+  padding: 20px;
+}
+
+.dispatcher-start-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dispatcher-start-steps a {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--dispatcher-line);
+  border-radius: var(--radius-md);
+  color: var(--dispatcher-text);
+  background: var(--dispatcher-canvas);
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dispatcher-start-steps a:hover,
+.dispatcher-start-steps a:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--dispatcher-surface));
+}
+
+.dispatcher-start-steps b {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  font-size: 14px;
+}
+
+.dispatcher-start-steps span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dispatcher-start-steps strong {
+  font-size: 14px;
+}
+
+.dispatcher-start-steps small {
+  color: var(--dispatcher-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dispatcher-trip-status {
+  --trip-dot: var(--dispatcher-muted);
+  font-size: 13px;
+}
+
+.dispatcher-trip-status > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dispatcher-trip-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--trip-dot);
+}
+
+.dispatcher-trip-status[data-status="confirmed"] { --trip-dot: var(--accent); }
+.dispatcher-trip-status[data-status="in_progress"] { --trip-dot: var(--status-info); }
+.dispatcher-trip-status[data-status="completed"] { --trip-dot: var(--status-ok); }
+.dispatcher-trip-status[data-status="cancelled"] { --trip-dot: var(--status-bad); }
+
+.dispatcher-trip-status.is-empty .dispatcher-trip-dot {
+  opacity: 0.4;
+}
+
+.dispatcher-trip-status:not(.is-empty) {
+  border-color: color-mix(in srgb, var(--trip-dot) 45%, var(--dispatcher-line));
+  background: color-mix(in srgb, var(--trip-dot) 7%, var(--dispatcher-surface));
+}
+
+.dispatcher-trip-status:not(.is-empty) > span {
+  color: var(--dispatcher-text);
+}
+
+.dispatcher-trip-status strong {
+  font-size: 16px;
+}
+
+/* Oddiy kun/tun tugmasi */
+.simple-theme-toggle {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.simple-theme-toggle:hover,
+.simple-theme-toggle:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+@media (max-width: 960px) {
+  .dispatcher-start-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dispatcher-metric-featured > strong {
+    font-size: 22px;
+  }
+  .dispatcher-metric-featured {
+    padding: 14px 12px;
+  }
+}

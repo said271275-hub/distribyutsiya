@@ -35,7 +35,7 @@ import { lazy, Suspense } from 'react'
 import axios from 'axios'
 import api, { apiErrorMessage } from './api'
 import { useAuth } from './useAuth'
-import { StickmanThemeToggle } from './StickmanThemeToggle'
+import { SimpleThemeToggle } from './SimpleThemeToggle'
 import type { CompanyMe } from './CompanyProfilePage'
 import {
   buildOrderQueryParams,
@@ -138,7 +138,7 @@ function localDate() {
 }
 
 function DispatcherThemeToggle() {
-  return <StickmanThemeToggle />
+  return <SimpleThemeToggle />
 }
 
 function DispatcherPanel() {
@@ -413,10 +413,10 @@ function DashboardPage() {
       ) : dashboard.data ? (
         <>
           <section className="dispatcher-metrics" aria-label="Bugungi ko‘rsatkichlar">
-            <MetricCard icon={<ClipboardList size={18} />} label="Buyurtmalar" value={dashboard.data.orders_total} />
-            <MetricCard icon={<Clock3 size={18} />} label="Kutilayotgan" value={dashboard.data.pending} tone="amber" />
+            <MetricCard icon={<ClipboardList size={18} />} label="Buyurtmalar" value={dashboard.data.orders_total} featured />
+            <MetricCard icon={<Clock3 size={18} />} label="Kutilayotgan" value={dashboard.data.pending} tone="amber" featured />
             <MetricCard icon={<CheckCircle2 size={18} />} label="Yetkazilgan" value={dashboard.data.delivered} tone="green" />
-            <MetricCard icon={<Package size={18} />} label="Jami hajm" value={dashboard.data.total_volume} />
+            <MetricCard icon={<Package size={18} />} label="Jami hajm" value={dashboard.data.total_volume} unit="m³" />
             <MetricCard icon={<Clock3 size={18} />} label="Kechikkan nuqtalar" value={dashboard.data.overdue_stops} tone="red" />
             <MetricCard
               icon={<Truck size={18} />}
@@ -424,6 +424,18 @@ function DashboardPage() {
               value={(dashboard.data.trips_by_status.confirmed ?? 0) + (dashboard.data.trips_by_status.in_progress ?? 0)}
             />
           </section>
+          {dashboard.data.orders_total === 0 && (
+            <section className="dispatcher-card dispatcher-start-guide" aria-label="Boshlash uchun qadamlar">
+              <div className="dispatcher-section-heading">
+                <div><span className="dispatcher-eyebrow">BOSHLASH UCHUN</span><h2>Bugun buyurtma yo‘q. Keyingi qadamlar</h2></div>
+              </div>
+              <ol className="dispatcher-start-steps">
+                <li><NavLink to="/company/catalog"><b>1</b><span><strong>Mahsulot qo‘shing</strong><small>Nom, narx va rasm kiriting</small></span></NavLink></li>
+                <li><NavLink to="/company/shops"><b>2</b><span><strong>Do‘konlarni ulang</strong><small>Do‘konlar sizni katalogda topadi</small></span></NavLink></li>
+                <li><NavLink to="/company/trips"><b>3</b><span><strong>Reysni rejalashtiring</strong><small>Haydovchi va marshrutni belgilang</small></span></NavLink></li>
+              </ol>
+            </section>
+          )}
           <section className="dispatcher-card dispatcher-trip-summary">
             <div className="dispatcher-section-heading">
               <div><span className="dispatcher-eyebrow">YETKAZIB BERISH</span><h2>Reyslar holati</h2></div>
@@ -431,8 +443,8 @@ function DashboardPage() {
             </div>
             <div className="dispatcher-trip-statuses">
               {Object.entries(tripStatusLabels).map(([status, label]) => (
-                <div className="dispatcher-trip-status" key={status}>
-                  <span>{label}</span><strong>{dashboard.data?.trips_by_status[status] ?? 0}</strong>
+                <div className={`dispatcher-trip-status${(dashboard.data?.trips_by_status[status] ?? 0) === 0 ? ' is-empty' : ''}`} data-status={status} key={status}>
+                  <span><i className="dispatcher-trip-dot" aria-hidden="true" />{label}</span><strong>{dashboard.data?.trips_by_status[status] ?? 0}</strong>
                 </div>
               ))}
             </div>
@@ -448,19 +460,23 @@ function MetricCard({
   label,
   value,
   tone = 'default',
+  unit,
+  featured = false,
 }: {
   icon: ReactNode
   label: string
   value: string | number
   tone?: 'default' | 'amber' | 'green' | 'red'
+  unit?: string
+  featured?: boolean
 }) {
   const isZero = Number(value) === 0
   const shownTone = isZero && (tone === 'red' || tone === 'amber') ? 'neutral' : tone
   return (
-    <article className={`dispatcher-metric dispatcher-metric-${shownTone}`}>
+    <article className={`dispatcher-metric dispatcher-metric-${shownTone}${featured ? ' dispatcher-metric-featured' : ''}`}>
       <span className="dispatcher-metric-icon">{icon}</span>
       <span className="dispatcher-metric-label">{label}</span>
-      <strong>{value}</strong>
+      <strong>{value}{unit ? <em className="dispatcher-metric-unit">{unit}</em> : null}</strong>
     </article>
   )
 }
