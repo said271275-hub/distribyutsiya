@@ -43,6 +43,7 @@ import { ru } from './i18n/ru'
 import { uz } from './i18n/uz'
 import './ShopPanel.css'
 import RecurringOrdersPage from './RecurringOrdersPage'
+import ShopDatePicker from './ShopDatePicker'
 
 const LocationPicker = lazy(() => import('./ShopMap'))
 const ShopDirectoryPage = lazy(() => import('./ShopDirectoryPage'))
@@ -688,17 +689,17 @@ function CartPage({
                 <div className="shop-group-delivery-settings">
                   <h4>Yetkazish tafsilotlari ({group.company_name})</h4>
                   <div className="shop-field-grid">
-                    <label className="shop-field">
+                    <div className="shop-field" role="group" aria-label={t('deliveryDate')}>
                       {t('deliveryDate')}
-                      <input
-                        type="date"
-                        min={dateInDays(1)}
+                      <ShopDatePicker
                         value={config.date}
-                        onChange={(e) =>
-                          updateDeliveryConfig(group.company_id, { date: e.target.value })
+                        min={dateInDays(1)}
+                        ariaLabel={t('deliveryDate')}
+                        onChange={(date) =>
+                          updateDeliveryConfig(group.company_id, { date })
                         }
                       />
-                    </label>
+                    </div>
                     <div className="shop-time-range-grid">
                       <label className="shop-field">
                         Dan
