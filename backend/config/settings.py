@@ -339,6 +339,10 @@ if (
     )
 
 CORS_ALLOW_CREDENTIALS = True
+# Checkout `Idempotency-Key` sarlavhasini yuboradi; bu ro'yxatda bo'lmasa brauzer POST'ni bloklaydi.
+from corsheaders.defaults import default_headers  # noqa: E402
+
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key", "x-idempotency-key")
 CSRF_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
 SESSION_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
 

@@ -148,11 +148,28 @@ api.interceptors.response.use(
   },
 )
 
+function firstErrorString(value: unknown, depth = 0): string | null {
+  if (typeof value === 'string') return value
+  if (depth > 3 || value === null || typeof value !== 'object') return null
+  const items = Array.isArray(value) ? value : Object.values(value as Record<string, unknown>)
+  for (const item of items) {
+    const found = firstErrorString(item, depth + 1)
+    if (found) return found
+  }
+  return null
+}
+
 export function apiErrorMessage(error: unknown, fallback = 'So‘rovni bajarib bo‘lmadi.') {
   const language = readLanguage(localStorage)
   const localize = (message: string) => translateServerError(message, language) ?? message
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data as
+    if (!error.response) {
+      // Server javob bermadi: tarmoq, CORS yoki vaqt tugashi
+      return error.code === 'ECONNABORTED'
+        ? 'Server javob berishga ulgurmadi. Birozdan keyin qayta urinib ko‘ring.'
+        : 'Server bilan aloqa o‘rnatib bo‘lmadi. Internetni tekshirib, qayta urinib ko‘ring.'
+    }
+    const data = error.response.data as
       | { detail?: string; account?: string; phone?: string; password?: string; code?: string }
       | undefined
     if (typeof data?.detail === 'string') return localize(data.detail)
@@ -160,6 +177,11 @@ export function apiErrorMessage(error: unknown, fallback = 'So‘rovni bajarib b
       const value = data?.[key]
       if (typeof value === 'string') return localize(value)
       if (Array.isArray(value) && typeof value[0] === 'string') return localize(value[0])
+    }
+    // Boshqa maydon xatolari (masalan, delivery_date, orders): birinchi tushunarli matnni ko'rsatamiz
+    if (error.response.status >= 400 && error.response.status < 500) {
+      const message = firstErrorString(data)
+      if (message) return localize(message)
     }
   }
   return fallback
