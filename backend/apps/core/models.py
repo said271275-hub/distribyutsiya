@@ -159,3 +159,24 @@ class InventoryEntry(CompanyOwnedModel):
 
     def delete(self, *args, **kwargs):
         raise TypeError("Ombor harakatlari jurnalini o‘chirib bo‘lmaydi.")
+
+
+class StoredFile(models.Model):
+    """Yuklangan fayl (masalan, mahsulot rasmi) bazada saqlanadi.
+
+    Render'ning bepul rejasida disk vaqtinchalik, shuning uchun fayllar
+    har qayta ishga tushganda yo'qolmasligi uchun Postgres'da saqlanadi.
+    """
+
+    name = models.CharField(max_length=500, unique=True)
+    content = models.BinaryField()
+    content_type = models.CharField(max_length=100, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "saqlangan fayl"
+        verbose_name_plural = "saqlangan fayllar"
+
+    def __str__(self):
+        return self.name

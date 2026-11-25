@@ -2,12 +2,12 @@ from django.conf import settings
 from django.contrib import admin
 from django.conf.urls.static import static
 from django.urls import include, path, re_path
-from django.views.static import serve
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
 )
 
+from apps.core.media import serve_media
 from apps.core.permissions import DevelopmentOnlyPermission
 
 urlpatterns = [
@@ -31,7 +31,7 @@ urlpatterns = [
         name="swagger-ui",
     ),
     # Media fayllarni to'g'ridan-to'g'ri uzatish
-    re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+    re_path(r"^media/(?P<path>.*)$", serve_media),
 ]
 
 if settings.DEBUG:

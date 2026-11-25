@@ -151,8 +151,7 @@ CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL")
 if not CLOUDINARY_URL and not DEBUG:
     import logging
     logging.getLogger(__name__).warning(
-        "CLOUDINARY_URL o'rnatilmagan: yuklangan rasmlar vaqtinchalik diskka "
-        "saqlanadi va har deploy'dan keyin yo'qoladi."
+        "CLOUDINARY_URL o'rnatilmagan: yuklangan rasmlar ma'lumotlar bazasida saqlanadi."
     )
 if CLOUDINARY_URL:
     if "cloudinary_storage" not in INSTALLED_APPS:
@@ -171,9 +170,15 @@ if CLOUDINARY_URL:
         },
     }
 else:
+    # Cloudinary yo'q bo'lsa: productionda rasmlar bazada saqlanadi (Render diski vaqtinchalik),
+    # lokal ishlab chiqishda esa oddiy fayl tizimida.
+    _media_storage = os.environ.get("DJANGO_MEDIA_STORAGE", "").strip().lower()
+    _use_db_media = _media_storage == "database" or (_media_storage != "filesystem" and not DEBUG)
     STORAGES = {
         "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
+            "BACKEND": "apps.core.db_storage.DatabaseStorage"
+            if _use_db_media
+            else "django.core.files.storage.FileSystemStorage",
         },
         "staticfiles": {
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
