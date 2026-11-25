@@ -41,6 +41,7 @@ from apps.logistics.routing import (
 )
 from apps.orders.models import Order, OrderItem
 from apps.orders.sms_notifications import queue_order_sms
+from apps.payments.models import BalanceEntry, Payment
 
 
 class TripPage(PageNumberPagination):
@@ -218,6 +219,20 @@ class DriverPickingListItemSerializer(serializers.Serializer):
     quantity = serializers.CharField()
 
 
+class DriverStopPaymentOutputSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = ("id", "amount", "method", "paid_at", "note")
+
+
+class DriverStopPaymentInputSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
+    method = serializers.ChoiceField(choices=Payment.Method.choices)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+
 class DriverTripStopSerializer(serializers.ModelSerializer):
     shop_name = serializers.CharField(source="shop.name", read_only=True)
     address = serializers.CharField(source="shop.address", read_only=True)
@@ -231,14 +246,22 @@ class DriverTripStopSerializer(serializers.ModelSerializer):
     )
     orders = serializers.SerializerMethodField()
     issue_history = serializers.SerializerMethodField()
+    payments = serializers.SerializerMethodField()
 
     class Meta:
         model = TripStop
         fields = (
             "id", "shop_id", "shop_name", "address", "phone", "district", "latitude",
             "longitude", "sequence", "eta", "eta_window_from", "delivered_at",
-            "eta_window_to", "orders", "issue_history",
+            "eta_window_to", "orders", "issue_history", "payments",
         )
+
+    @extend_schema_field(DriverStopPaymentOutputSerializer(many=True))
+    def get_payments(self, stop) -> list[dict]:
+        return DriverStopPaymentOutputSerializer(
+            Payment.objects.filter(trip_stop=stop, status=Payment.Status.CONFIRMED).order_by("id"),
+            many=True,
+        ).data
 
     def get_issue_history(self, stop) -> list[dict]:
         return TripStopOutputSerializer().get_issue_history(stop)
@@ -1654,3 +1677,79 @@ class DashboardView(APIView):
             "trips_by_status": trips_by_status,
             "pending_subscriptions": pending_subscriptions,
         }).data)
+
+
+class DriverStopPaymentView(APIView):
+    """Haydovchi do'kondan olingan to'lovni qayd etadi: to'lov + qarzdan ayirish."""
+
+    permission_classes = (IsAuthenticated, DriverPermission)
+
+    @extend_schema(
+        request=DriverStopPaymentInputSerializer, responses=DriverTripOutputSerializer
+    )
+    @transaction.atomic
+    def post(self, request, trip_id, stop_id):
+        trip = get_object_or_404(
+            Trip.objects.select_for_update().filter(
+                company=request.user.company,
+                driver__user=request.user,
+            ),
+            pk=trip_id,
+        )
+        stop = get_object_or_404(
+            TripStop.objects.select_for_update().filter(trip=trip),
+            pk=stop_id,
+        )
+        serializer = DriverStopPaymentInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        prepared_action = _check_driver_action_replay(request, trip, stop, "payment")
+        if isinstance(prepared_action, Response):
+            return prepared_action
+        if trip.status not in (
+            Trip.Status.CONFIRMED, Trip.Status.IN_PROGRESS, Trip.Status.COMPLETED
+        ):
+            raise ValidationError({"trip": "Bu reys uchun to'lov qabul qilib bo'lmaydi."})
+
+        payment = Payment(
+            company=trip.company,
+            shop_id=stop.shop_id,
+            amount=values["amount"],
+            method=values["method"],
+            status=Payment.Status.CONFIRMED,
+            paid_at=timezone.now(),
+            note=values.get("note", ""),
+            trip_stop=stop,
+            collected_by=request.user,
+        )
+        payment.full_clean()
+        payment.save()
+        entry = BalanceEntry.objects.create(
+            company=trip.company,
+            shop_id=stop.shop_id,
+            amount=payment.amount,
+            direction=BalanceEntry.Direction.CREDIT,
+            payment=payment,
+            note=payment.note or f"Haydovchi qabul qildi, to'lov #{payment.pk}",
+        )
+        entry.post()
+        AuditLog.objects.create(
+            company=trip.company,
+            actor=request.user,
+            action="trip.stop.payment",
+            entity_type="Payment",
+            entity_id=str(payment.pk),
+            after={
+                "trip_id": trip.pk,
+                "stop_id": stop.pk,
+                "shop_id": stop.shop_id,
+                "amount": str(payment.amount),
+                "method": payment.method,
+            },
+        )
+        _save_driver_action_receipt(request, trip, stop, "payment", prepared_action)
+        result = _trip_queryset(
+            request.user.company, driver=request.user, driver_details=True
+        ).get(pk=trip.pk)
+        attach_trip_stop_issue_history([result])
+        return Response(DriverTripOutputSerializer(result).data)

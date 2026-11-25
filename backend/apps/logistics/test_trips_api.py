@@ -18,7 +18,7 @@ from apps.core.models import InventoryEntry, ProductStock
 from apps.logistics.models import DriverProfile, Trip, TripStop, TripStopOrder, Vehicle
 from apps.logistics.routing import nearest_neighbor_order
 from apps.orders.models import Order, OrderItem, OrderStatusHistory, SmsOutbox
-from apps.payments.models import BalanceEntry, ShopBalance
+from apps.payments.models import BalanceEntry, Payment, ShopBalance
 
 
 class TripApiTests(TestCase):
@@ -934,6 +934,97 @@ class TripApiTests(TestCase):
         self.assertEqual(stock.current_quantity, Decimal("-1.00"))
         self.assertEqual(stock.reserved_quantity, Decimal("0.00"))
         self.assert_inventory_ledger_matches()
+
+    def _delivered_stop_for_driver(self):
+        order = self.make_order()
+        trip = self.create_trip()
+        self.add_stop(trip, self.shop, [order.pk])
+        self.client.post(
+            f"/api/v1/admin/trips/{trip.pk}/confirm/",
+            {"reason": "Reys tasdiqlandi"},
+            format="json",
+        )
+        stop = trip.stops.get()
+        self.client.force_authenticate(self.driver_user)
+        self.client.post(
+            f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/delivered/", {}, format="json"
+        )
+        return trip, stop
+
+    def test_driver_payment_credits_shop_balance_and_shows_on_stop(self):
+        trip, stop = self._delivered_stop_for_driver()
+        url = f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/payment/"
+
+        response = self.client.post(
+            url, {"amount": "400.00", "method": "cash", "note": "Naqd olindi"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        payments = response.data["stops"][0]["payments"]
+        self.assertEqual(len(payments), 1)
+        self.assertEqual(payments[0]["amount"], "400.00")
+        self.assertEqual(payments[0]["method"], "cash")
+        payment = Payment.objects.get(trip_stop=stop)
+        self.assertEqual(payment.collected_by, self.driver_user)
+        self.assertEqual(payment.shop_id, self.shop.pk)
+        self.assertEqual(payment.status, Payment.Status.CONFIRMED)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("600.00"),
+        )
+        self.assertEqual(BalanceEntry.objects.filter(payment=payment).count(), 1)
+        self.assertEqual(
+            AuditLog.objects.filter(action="trip.stop.payment", entity_id=str(payment.pk)).count(),
+            1,
+        )
+
+    def test_driver_payment_idempotency_key_prevents_duplicate_payments(self):
+        trip, stop = self._delivered_stop_for_driver()
+        url = f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/payment/"
+        headers = {"HTTP_IDEMPOTENCY_KEY": "3c6f0f2e-7b53-4a6b-9a58-1c8d3b2a9f11"}
+        body = {"amount": "250.00", "method": "card"}
+
+        first = self.client.post(url, body, format="json", **headers)
+        replay = self.client.post(url, body, format="json", **headers)
+        reused = self.client.post(
+            url, {"amount": "999.00", "method": "card"}, format="json", **headers
+        )
+
+        self.assertEqual(first.status_code, 200, first.data)
+        self.assertEqual(replay.status_code, 200, replay.data)
+        self.assertEqual(reused.status_code, 409)
+        self.assertEqual(Payment.objects.filter(trip_stop=stop).count(), 1)
+        self.assertEqual(
+            ShopBalance.objects.get(company=self.company, shop=self.shop).current_balance,
+            Decimal("750.00"),
+        )
+
+    def test_driver_payment_validates_amount_and_method(self):
+        trip, stop = self._delivered_stop_for_driver()
+        url = f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/payment/"
+
+        for body in (
+            {"amount": "0", "method": "cash"},
+            {"amount": "-5", "method": "cash"},
+            {"amount": "100", "method": "crypto"},
+            {"method": "cash"},
+        ):
+            response = self.client.post(url, body, format="json")
+            self.assertEqual(response.status_code, 400, body)
+        self.assertFalse(Payment.objects.filter(trip_stop=stop).exists())
+
+    def test_driver_payment_only_on_own_trip_and_not_for_dispatcher(self):
+        trip, stop = self._delivered_stop_for_driver()
+        url = f"/api/v1/driver/trips/{trip.pk}/stops/{stop.pk}/payment/"
+        body = {"amount": "100.00", "method": "cash"}
+
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.post(url, body, format="json").status_code, 403)
+
+        other_driver = self.other_driver_user
+        self.client.force_authenticate(other_driver)
+        self.assertEqual(self.client.post(url, body, format="json").status_code, 404)
+        self.assertFalse(Payment.objects.filter(trip_stop=stop).exists())
 
     def test_driver_issue_is_scoped_to_own_trip_and_stop(self):
         own_trip = self.create_trip()

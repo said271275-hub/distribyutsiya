@@ -35,6 +35,23 @@ type DriverOrder = {
   total_price: string
   items: Array<{ id: number; product_name: string; unit: string; quantity: string }>
 }
+type DriverPaymentMethod = 'cash' | 'card' | 'bank_transfer' | 'other'
+type DriverPayment = {
+  id: number
+  amount: string
+  method: DriverPaymentMethod
+  paid_at: string | null
+  note: string
+}
+const driverPaymentLabels: Record<DriverPaymentMethod, string> = {
+  cash: 'Naqd',
+  card: 'Karta',
+  bank_transfer: 'Bank o‘tkazmasi',
+  other: 'Boshqa',
+}
+function formatMoney(value: string) {
+  return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 2 }).format(Number(value))} so‘m`
+}
 type DriverIssue = {
   reason: DriverIssueReason
   note: string
@@ -47,6 +64,7 @@ type DriverStop = Omit<MapStop, 'order_ids'> & {
   phone: string
   orders: DriverOrder[]
   issue_history: DriverIssue[]
+  payments?: DriverPayment[]
 }
 type DriverTrip = {
   id: number
@@ -122,6 +140,10 @@ export default function DriverPanel() {
   const [issueReason, setIssueReason] = useState<DriverIssueReason | ''>('')
   const [issueNote, setIssueNote] = useState('')
   const [issueQuantities, setIssueQuantities] = useState<Record<number, string>>({})
+  const [paymentStopId, setPaymentStopId] = useState<number | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<DriverPaymentMethod>('cash')
+  const [paymentNote, setPaymentNote] = useState('')
   const tripsQuery = useQuery({
     queryKey: ['driver-trips', user?.id, date],
     queryFn: async () => {
@@ -209,6 +231,23 @@ export default function DriverPanel() {
       window.dispatchEvent(new Event('driver-outbox-changed'))
     },
   })
+  const paymentMutation = useMutation({
+    mutationFn: ({ tripId, stopId, amount, method, note }: {
+      tripId: number
+      stopId: number
+      amount: string
+      method: DriverPaymentMethod
+      note: string
+    }) => enqueueAction('payment', tripId, stopId, { amount, method, ...(note ? { note } : {}) }),
+    onSuccess: (updatedTrips) => {
+      queryClient.setQueryData<DriverTrip[]>(['driver-trips', user?.id, date], updatedTrips)
+      setPaymentStopId(null)
+      setPaymentAmount('')
+      setPaymentMethod('cash')
+      setPaymentNote('')
+      window.dispatchEvent(new Event('driver-outbox-changed'))
+    },
+  })
   const trips = tripsQuery.data ?? []
   const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? trips[0] ?? null
   const orderedStops = selectedTrip ? sortDriverStops(selectedTrip.stops) : []
@@ -274,9 +313,9 @@ export default function DriverPanel() {
           const [action] = await getPendingDriverActions(user.id)
           if (!action) break
           try {
-            const path = action.type === 'delivered'
-              ? `/v1/driver/trips/${action.tripId}/stops/${action.stopId}/delivered/`
-              : `/v1/driver/trips/${action.tripId}/stops/${action.stopId}/issue/`
+            const path = `/v1/driver/trips/${action.tripId}/stops/${action.stopId}/${
+              action.type === 'delivered' ? 'delivered' : action.type === 'payment' ? 'payment' : 'issue'
+            }/`
             const { data: updatedTrip } = await api.post<DriverTrip>(path, action.payload, {
               headers: { 'Idempotency-Key': action.actionId },
             })
@@ -521,6 +560,87 @@ export default function DriverPanel() {
                                   {issue.note && <p>{issue.note}</p>}
                                 </div>
                               ))}
+                            </div>
+                            <div className="driver-payments">
+                              {(stop.payments ?? []).map((payment) => (
+                                <div className="driver-payment-entry" key={payment.id}>
+                                  <strong>{formatMoney(payment.amount)}</strong>
+                                  <span>{driverPaymentLabels[payment.method] ?? payment.method}</span>
+                                  {payment.paid_at && <small>{formatDeliveredAt(payment.paid_at)}</small>}
+                                </div>
+                              ))}
+                              {paymentStopId === stop.id ? (
+                                <form
+                                  className="driver-issue-form"
+                                  onSubmit={(event) => {
+                                    event.preventDefault()
+                                    if (!(Number(paymentAmount) > 0)) return
+                                    paymentMutation.reset()
+                                    paymentMutation.mutate({
+                                      tripId: selectedTrip.id,
+                                      stopId: stop.id,
+                                      amount: Number(paymentAmount).toFixed(2),
+                                      method: paymentMethod,
+                                      note: paymentNote.trim(),
+                                    })
+                                  }}
+                                >
+                                  <label>
+                                    <span>Olingan summa (so‘m)</span>
+                                    <input
+                                      required
+                                      type="number"
+                                      inputMode="decimal"
+                                      min="0.01"
+                                      step="0.01"
+                                      value={paymentAmount}
+                                      onChange={(event) => setPaymentAmount(event.target.value)}
+                                    />
+                                  </label>
+                                  <label>
+                                    <span>To‘lov usuli</span>
+                                    <select
+                                      value={paymentMethod}
+                                      onChange={(event) => setPaymentMethod(event.target.value as DriverPaymentMethod)}
+                                    >
+                                      {Object.entries(driverPaymentLabels).map(([value, label]) => (
+                                        <option key={value} value={value}>{label}</option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
+                                    <span>Izoh (ixtiyoriy)</span>
+                                    <textarea
+                                      maxLength={500}
+                                      value={paymentNote}
+                                      onChange={(event) => setPaymentNote(event.target.value)}
+                                    />
+                                  </label>
+                                  {paymentMutation.isError && (
+                                    <p className="driver-delivery-error" role="alert">
+                                      {apiErrorMessage(paymentMutation.error, 'To‘lovni saqlab bo‘lmadi.')}
+                                    </p>
+                                  )}
+                                  <div className="driver-issue-actions">
+                                    <button type="button" className="driver-issue-cancel" onClick={() => setPaymentStopId(null)}>Bekor qilish</button>
+                                    <button type="submit" className="driver-mark-delivered" disabled={paymentMutation.isPending}>
+                                      <Check size={17} /> To‘lovni saqlash
+                                    </button>
+                                  </div>
+                                </form>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="driver-report-issue"
+                                  disabled={!canMarkStopDelivered(selectedTrip.status) && selectedTrip.status !== 'completed'}
+                                  onClick={() => {
+                                    paymentMutation.reset()
+                                    setPaymentStopId(stop.id)
+                                  }}
+                                >
+                                  To‘lov qabul qilish
+                                </button>
+                              )}
                             </div>
                             {stop.delivered_at ? (
                               <div className="driver-stop-delivered" role="status">

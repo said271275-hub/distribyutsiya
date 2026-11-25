@@ -7,6 +7,8 @@ const DATABASE_VERSION = 1
 export type DriverActionPayload = {
   reason?: 'shop_closed' | 'refused' | 'partial_delivery' | 'other'
   note?: string
+  amount?: string
+  method?: 'cash' | 'card' | 'bank_transfer' | 'other'
   delivered_orders?: Array<{
     order_id: number
     items: Array<{ item_id: number; quantity: string }>
@@ -19,7 +21,7 @@ export type QueuedDriverAction = {
   tripId: number
   stopId: number
   date: string
-  type: 'delivered' | 'issue'
+  type: 'delivered' | 'issue' | 'payment'
   payload: DriverActionPayload
   createdAt: string
   sequence?: number

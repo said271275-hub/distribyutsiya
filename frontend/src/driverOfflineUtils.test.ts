@@ -72,4 +72,19 @@ describe('offline driver actions', () => {
     expect(updated[0].stops[0].issue_history[0].reason).toBe('partial_delivery')
     expect(updated[0].stops[0].issue_history[0].note).toBe('Bir qismi yetkazildi')
   })
+
+  it('adds a queued payment to the matching stop without changing delivery state', () => {
+    const [updated] = applyQueuedDriverAction([trip], action({
+      type: 'payment',
+      stopId: 21,
+      payload: { amount: '150000.00', method: 'cash', note: 'Naqd' },
+      createdAt: '2026-11-25T10:00:00.000Z',
+    }))
+
+    expect(updated.stops[1].payments).toHaveLength(1)
+    expect(updated.stops[1].payments?.[0]).toMatchObject({ amount: '150000.00', method: 'cash', note: 'Naqd' })
+    expect(updated.stops[1].delivered_at).toBeNull()
+    expect(updated.stops[0].payments).toBeUndefined()
+    expect(updated.status).toBe('in_progress')
+  })
 })

@@ -11,6 +11,7 @@ export type OfflineTrip = {
     id: number
     delivered_at: string | null
     issue_history: Array<{ reason: string; note: string; created_at: string }>
+    payments?: Array<{ id: number; amount: string; method: string; paid_at: string | null; note: string }>
     orders: Array<{ id: number; status: string }>
   }>
 }
@@ -24,6 +25,18 @@ export function applyQueuedDriverAction<T extends OfflineTrip>(
     if (trip.id !== action.tripId) return trip
     const stops = trip.stops.map((stop) => {
       if (stop.id !== action.stopId) return stop
+      if (action.type === 'payment') {
+        return {
+          ...stop,
+          payments: [...(stop.payments ?? []), {
+            id: -Date.parse(actionTime),
+            amount: action.payload.amount ?? '0',
+            method: action.payload.method ?? 'cash',
+            paid_at: actionTime,
+            note: action.payload.note ?? '',
+          }],
+        }
+      }
       if (action.type === 'delivered') {
         return {
           ...stop,
