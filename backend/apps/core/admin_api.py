@@ -4,7 +4,7 @@ from datetime import datetime, time
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
-from django.db.models import F, Prefetch, Q, Sum
+from django.db.models import Exists, F, OuterRef, Prefetch, Q, Sum
 from django.forms.models import model_to_dict
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -500,18 +500,18 @@ class ShopAdminViewSet(
     filter_backends = ()
 
     def get_queryset(self):
-        shops = Shop.objects.filter(company_links__company=self.company)
+        # Barcha shartlar aynan SHU kompaniyaning obuna yozuviga tegishli bo'lishi kerak
+        # (alohida .filter() chaqiruvlari boshqa kompaniyadagi faol obunani ham sanab yuborardi).
+        links = CompanyShopLink.objects.filter(company=self.company, shop=OuterRef("pk"))
+        shops = Shop.objects.filter(Exists(links))
         shop_status = self.request.query_params.get("status")
         if shop_status == "archived":
-            shops = shops.filter(company_links__is_active=False)
+            shops = shops.filter(Exists(links.filter(is_active=False)))
         elif shop_status in ("active", "inactive"):
-            shops = shops.filter(
-                company_links__is_active=True,
-                status=shop_status,
-            )
+            shops = shops.filter(Exists(links.filter(is_active=True)), status=shop_status)
         elif shop_status != "all":
-            shops = shops.filter(company_links__is_active=True)
-        return shops.distinct().order_by("name")
+            shops = shops.filter(Exists(links.filter(is_active=True)))
+        return shops.order_by("name")
 
     def perform_create(self, serializer):
         shop = serializer.save()

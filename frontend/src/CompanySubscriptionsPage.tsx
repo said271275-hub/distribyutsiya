@@ -48,7 +48,9 @@ export default function CompanySubscriptionsPage() {
       if (tab !== 'all') {
         params.status = tab
       }
-      return (await api.get<{ count: number; results: SubscriptionItem[] }>('/v1/company/subscriptions/', { params })).data
+      // Backend oddiy massiv qaytaradi; sahifalangan ({ results }) javobni ham qo'llab-quvvatlaymiz.
+      const { data } = await api.get<SubscriptionItem[] | { results: SubscriptionItem[] }>('/v1/company/subscriptions/', { params })
+      return Array.isArray(data) ? data : (data.results ?? [])
     },
   })
 
@@ -77,7 +79,7 @@ export default function CompanySubscriptionsPage() {
     },
   })
 
-  const items = subscriptionsQuery.data?.results ?? []
+  const items = subscriptionsQuery.data ?? []
   const filteredItems = items.filter((item) =>
     search ? item.shop_name.toLowerCase().includes(search.toLowerCase()) || item.district.toLowerCase().includes(search.toLowerCase()) : true,
   )
