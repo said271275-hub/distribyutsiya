@@ -1,0 +1,28 @@
+/* Kirish (landing) sahifasi: tuzatishlar va yaxshilashlar */
+
+/* Yuqori panel: logotip + tema tugmasi */
+.landing-choice-container .landing-topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:40px}
+.landing-brand{display:inline-flex;align-items:center;gap:11px;color:var(--text);text-decoration:none}
+.landing-brand > span:last-child{display:flex;flex-direction:column;gap:2px}
+.landing-brand-mark{display:grid;width:40px;height:40px;flex:0 0 auto;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 32%,transparent);border-radius:12px;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.landing-brand strong{font-size:20px;font-weight:780;letter-spacing:-.04em;line-height:1.05}
+.landing-brand small{color:var(--text-muted);font-size:9px;font-weight:650;letter-spacing:.1em}
+
+/* Matnlar biroz kattaroq */
+.landing-choice-header p{font-size:16px}
+.landing-role-content p{font-size:14.5px}
+.landing-role-features li{font-size:13.5px}
+
+/* Ikkinchi darajali tugma: avval matni ko'rinmas edi (yashil fonda deyarli shaffof matn) */
+.landing-role-actions .landing-action-btn{min-height:48px}
+.landing-role-actions .landing-action-btn.secondary-button{border:1px solid var(--border);color:var(--text);background:transparent;box-shadow:none}
+.landing-role-actions .landing-action-btn.secondary-button:hover{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);transform:none;box-shadow:none}
+
+/* Kartaga hover'da urg'u */
+.landing-role-card{transition:transform .2s,box-shadow .2s,border-color .2s}
+.landing-role-card:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--border))}
+
+@media(max-width:520px){
+  .landing-choice-container .landing-topbar{margin-bottom:28px}
+  .landing-role-card{padding:28px 22px}
+}

@@ -2,7 +2,9 @@ import { ArrowRight, Building2, Package, Store } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
 import { roleHomes } from './roleAccess'
+import { SimpleThemeToggle } from './SimpleThemeToggle'
 import './App.css'
+import './LandingChoicePage.css'
 
 export default function LandingChoicePage() {
   const { user, loading } = useAuth()
@@ -22,6 +24,17 @@ export default function LandingChoicePage() {
   return (
     <main className="landing-choice-layout">
       <div className="landing-choice-container">
+        <div className="landing-topbar">
+          <Link to="/" className="landing-brand" aria-label="Tarqatuv">
+            <span className="landing-brand-mark"><Package size={20} /></span>
+            <span>
+              <strong>tarqatuv</strong>
+              <small>BOSHQARUV TIZIMI</small>
+            </span>
+          </Link>
+          <SimpleThemeToggle />
+        </div>
+
         <header className="landing-choice-header">
           <div className="landing-badge">
             <Package size={16} />
