@@ -320,12 +320,10 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
         <div className="notice success-notice"><span>✓</span> {t('auth.passwordResetDone')}</div>
       )}
 
-      {!staff && (
-        <div className="auth-switch" role="tablist" aria-label={t('auth.loginType')}>
-          <Link className="auth-tab active-tab" to="/login">{t('auth.shopOwner')}</Link>
-          <Link className="auth-tab" to="/staff/login">{t('auth.staff')}</Link>
-        </div>
-      )}
+      <div className="auth-switch" role="tablist" aria-label={t('auth.loginType')}>
+        <Link className={`auth-tab${staff ? '' : ' active-tab'}`} to="/login" aria-current={staff ? undefined : 'page'}>{t('auth.shopOwner')}</Link>
+        <Link className={`auth-tab${staff ? ' active-tab' : ''}`} to="/staff/login" aria-current={staff ? 'page' : undefined}>{t('auth.staff')}</Link>
+      </div>
 
       <form className="auth-form" onSubmit={submit} noValidate>
         <PhoneControl control={control} error={errors.phone?.message} t={t} />
