@@ -233,8 +233,15 @@ function PhoneControl({
   )
 }
 
-function LoginPage({ staff = false }: { staff?: boolean }) {
-  const { t } = useTranslation()
+const companyRegisterCopy = {
+  uz: { question: 'Yangi kompaniya ochmoqchimisiz?', link: 'Kompaniyani ro‘yxatdan o‘tkazish' },
+  ru: { question: 'Хотите открыть новую компанию?', link: 'Зарегистрировать компанию' },
+} as const
+
+// Bitta umumiy kirish: do‘konchi, kompaniya xodimi va haydovchi shu yerdan kiradi.
+// Foydalanuvchi roli bo‘yicha o‘z paneliga yo‘naltiriladi (roleHomes).
+function LoginPage() {
+  const { t, language } = useTranslation()
   const { login, restore, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -244,6 +251,7 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
   const [formError, setFormError] = useState('')
   const params = new URLSearchParams(location.search)
   const loginSchema = useMemo(() => createLoginSchema(t), [t])
+  const companyCopy = companyRegisterCopy[language === 'ru' ? 'ru' : 'uz']
   const { control, register, handleSubmit, formState: { errors, isSubmitting } } =
     useForm<LoginValues>({
       resolver: zodResolver(loginSchema),
@@ -277,11 +285,7 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
       }
       const signedInUser = restoreMode
         ? await restore(normalizePhone(values.phone), values.password, loginCode)
-        : await login(
-          normalizePhone(values.phone),
-          values.password,
-          staff ? 'staff' : 'shop',
-        )
+        : await login(normalizePhone(values.phone), values.password, 'shop')
       navigate(
         signedInUser.must_change_password
           ? '/password/change'
@@ -294,19 +298,17 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
   })
 
   return (
-    <AuthShell mode={staff ? 'staff' : 'shop'}>
+    <AuthShell mode="shop">
       <div className="auth-heading">
         {restoreMode && <DevOtpBadge />}
-        <span className="section-kicker">{t(staff ? 'auth.staffArea' : 'auth.welcome')}</span>
-        <h2>{t(restoreMode ? 'auth.restoreTitle' : staff ? 'auth.staffTitle' : 'auth.loginTitle')}</h2>
+        <span className="section-kicker">{t('auth.welcome')}</span>
+        <h2>{t(restoreMode ? 'auth.restoreTitle' : 'auth.loginTitle')}</h2>
         <p>
           {restoreMode
             ? codeRequested
               ? t('auth.codeSent')
               : t('auth.restoreDescription')
-            : staff
-              ? t('auth.staffDescription')
-              : t('auth.loginDescription')}
+            : t('auth.loginDescription')}
         </p>
       </div>
 
@@ -318,13 +320,6 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
       )}
       {params.get('reset') && (
         <div className="notice success-notice"><span>✓</span> {t('auth.passwordResetDone')}</div>
-      )}
-
-      {!staff && (
-        <div className="auth-switch" role="tablist" aria-label={t('auth.loginType')}>
-          <Link className="auth-tab active-tab" to="/login">{t('auth.shopOwner')}</Link>
-          <Link className="auth-tab" to="/staff/login">{t('auth.staff')}</Link>
-        </div>
       )}
 
       <form className="auth-form" onSubmit={submit} noValidate>
@@ -369,27 +364,23 @@ function LoginPage({ staff = false }: { staff?: boolean }) {
             {t('auth.forgotPassword')}
           </button>
         )}
-        {!staff && (
-          <button type="button" className="text-button" onClick={() => { setRestoreMode(!restoreMode); setCodeRequested(false); setLoginCode(''); setFormError('') }}>
-            {restoreMode ? t('auth.restoreLink') : t('auth.cancelDeletionLink')}
-          </button>
-        )}
-        {staff ? (
+        <button type="button" className="text-button" onClick={() => { setRestoreMode(!restoreMode); setCodeRequested(false); setLoginCode(''); setFormError('') }}>
+          {restoreMode ? t('auth.restoreLink') : t('auth.cancelDeletionLink')}
+        </button>
+        {!restoreMode && (
           <div style={{ display: 'grid', gap: 6 }}>
+            <p>{t('auth.noAccount')} <Link to="/register">{t('auth.registerLink')} <span>↗</span></Link></p>
             <p>
-              Yangi kompaniya ochmoqchimisiz?{' '}
+              {companyCopy.question}{' '}
               <Link to="/company/register" style={{ fontWeight: 600 }}>
-                Kompaniyani ro‘yxatdan o‘tkazish <span>↗</span>
+                {companyCopy.link} <span>↗</span>
               </Link>
             </p>
-            <p>{t('auth.needStaff')} <span>{t('auth.contactAdmin')}</span></p>
           </div>
-        ) : !restoreMode ? (
-          <p>{t('auth.noAccount')} <Link to="/register">{t('auth.registerLink')} <span>↗</span></Link></p>
-        ) : null}
+        )}
       </div>
 
-      {staff && (
+      {!restoreMode && (
         <div className="staff-access-note">
           <span>⌑</span>
           {t('auth.driverAccess')}
@@ -1079,8 +1070,7 @@ function ProtectedRoute({ children, roles }: { children: ReactNode; roles?: User
     return <main className="full-loader"><span className="button-spinner" /> {t('loading.secure')}</main>
   }
   if (!user) {
-    const staff = location.pathname !== '/shop' && location.pathname !== '/profile'
-    return <Navigate to={staff ? '/staff/login' : '/login'} replace state={{ from: location }} />
+    return <Navigate to="/login" replace state={{ from: location }} />
   }
   if (user.must_change_password && location.pathname !== '/password/change') {
     return <Navigate to="/password/change" replace />
@@ -1116,7 +1106,7 @@ function App() {
     <Routes>
       <Route path="/" element={<Suspense fallback={<main className="full-loader">{t('common.loading')}</main>}><LandingChoicePage /></Suspense>} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/staff/login" element={<LoginPage staff />} />
+      <Route path="/staff/login" element={<Navigate to="/login" replace />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/company/register" element={<Suspense fallback={<main className="full-loader">{t('common.loading')}</main>}><CompanyRegisterPage /></Suspense>} />
       <Route path="/password/reset" element={<PasswordResetPage />} />
