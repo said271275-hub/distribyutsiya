@@ -1,0 +1,13 @@
+.contact-menu{position:relative}
+.shop-app-shell .contact-menu>.shop-help-link{height:36px;min-height:36px;background:transparent;box-shadow:none;font-family:inherit;cursor:pointer}
+.contact-menu-panel{position:absolute;z-index:700;top:calc(100% + 8px);right:0;display:grid;width:300px;max-height:min(360px,70vh);overflow-y:auto;border:1px solid var(--shop-line);border-radius:10px;background:var(--shop-surface);box-shadow:0 12px 32px rgb(0 0 0 / .22)}
+.contact-menu-item{display:grid;gap:5px;padding:13px}
+.contact-menu-item+.contact-menu-item{border-top:1px solid var(--shop-line)}
+.contact-menu-item small{color:var(--shop-muted);font-size:12px}
+.contact-menu-item strong{color:var(--shop-text);font-size:17px;user-select:all}
+.contact-menu-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:5px}
+.shop-app-shell .contact-menu-actions a,.shop-app-shell .contact-menu-actions button{display:inline-flex;min-height:36px;align-items:center;justify-content:center;gap:6px;padding:0 8px;border:1px solid var(--shop-line);border-radius:6px;color:var(--accent);background:transparent;box-shadow:none;font:inherit;font-size:11px;font-weight:650;text-decoration:none;cursor:pointer}
+@media(max-width:680px){
+  .shop-app-shell .contact-menu>.shop-help-link{padding:0}
+  .contact-menu-panel{position:fixed;top:60px;right:12px;left:12px;width:auto}
+}

@@ -38,6 +38,7 @@ import {
 } from './dispatcherFinanceUtils'
 import { useAuth } from './useAuth'
 import { SimpleThemeToggle } from './SimpleThemeToggle'
+import { ContactMenu } from './ContactMenu'
 import { useTranslation } from './i18n/useTranslation'
 import { ru } from './i18n/ru'
 import { uz } from './i18n/uz'
@@ -218,7 +219,6 @@ function ShopPanel() {
     retry: false,
   })
 
-  const activeContact = profile.data?.company_contacts.find((company) => company.phone)
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const addToCart = (product: CatalogProduct) => {
     setCart((items) => {
@@ -293,7 +293,7 @@ function ShopPanel() {
         <header className="shop-topbar">
           <div className="shop-breadcrumb">Tarqatuv <span>/</span> {location.pathname.startsWith('/shop/recurring') ? 'Takroriy buyurtmalar' : location.pathname.startsWith('/shop/finance') ? t('finance') : t(navItems.find((item) => location.pathname === item.to || (item.to !== '/shop' && location.pathname.startsWith(item.to)))?.key ?? 'home')}</div>
           <div className="shop-top-actions">
-            {activeContact?.phone ? <a className="shop-help-link" href={`tel:${activeContact.phone}`}><Phone size={16} />{t('help')}</a> : null}
+            <ContactMenu contacts={profile.data?.company_contacts ?? []} />
             <div className="shop-language-switch" role="group" aria-label={t('language.select')}>
               {(['uz', 'ru'] as const).map((code) => (
                 <button key={code} type="button" className={language === code ? 'is-active' : ''} aria-pressed={language === code} onClick={() => setLanguage(code)}>{code.toUpperCase()}</button>
